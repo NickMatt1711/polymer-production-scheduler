@@ -176,23 +176,7 @@ with st.sidebar:
     
     if uploaded_file:
         st.success("✅ File uploaded successfully!")
-        
-        # Debug information
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🔍 File Debug Info")
-        st.sidebar.write(f"File name: {uploaded_file.name}")
-        st.sidebar.write(f"File size: {uploaded_file.size} bytes")
-        
-        # Check available sheets
-        try:
-            uploaded_file.seek(0)
-            excel_file = io.BytesIO(uploaded_file.read())
-            available_sheets = pd.ExcelFile(excel_file).sheet_names
-            st.sidebar.write("Available sheets:", available_sheets)
-            uploaded_file.seek(0)  # Reset for future reads
-        except Exception as e:
-            st.sidebar.error(f"Error reading sheet names: {e}")
-        
+          
         st.header("⚙️ Optimization Parameters")
         time_limit_min = st.number_input(
             "Time limit (minutes)",
@@ -364,14 +348,6 @@ if uploaded_file:
                 for index, row in plant_df.iterrows():
                     if pd.notna(row['Material Running']) and pd.notna(row['Expected Run Days']):
                         material_running_info[row['Plant']] = (row['Material Running'], int(row['Expected Run Days']))
-                
-                # Debug: Show allowed lines to verify
-                st.sidebar.markdown("---")
-                st.sidebar.subheader("🔍 Allowed Lines Validation")
-                for grade in grades:
-                    st.sidebar.write(f"{grade}: {allowed_lines[grade]}")
-                
-                st.sidebar.success("✅ Data preprocessing completed successfully!")
                 
             except Exception as e:
                 st.error(f"Error in data preprocessing: {str(e)}")
@@ -827,45 +803,7 @@ if uploaded_file:
                     plt.tight_layout()
                     st.pyplot(fig)
 
-                # Download results
-                st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
-                
-                # Create Excel report
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    # Write summary sheet
-                    summary_data = {
-                        'Metric': ['Objective Value', 'Total Transitions', 'Total Stockouts', 'Planning Horizon', 'Time Limit (min)'],
-                        'Value': [best_solution['objective'], best_solution['transitions']['total'], total_stockouts, f"{num_days} days", time_limit_min]
-                    }
-                    pd.DataFrame(summary_data).to_excel(writer, sheet_name='Summary', index=False)
-                    
-                    # Write production schedule
-                    if schedule_data:
-                        pd.DataFrame(schedule_data).to_excel(writer, sheet_name='Production Schedule', index=False)
-                    
-                    # Write inventory summary
-                    inventory_summary = []
-                    for grade in grades:
-                        final_inv = solver.Value(inventory_vars[(grade, num_days)])
-                        inventory_summary.append({
-                            'Grade': grade,
-                            'Final Inventory': final_inv,
-                            'Min Inventory': min_inventory[grade],
-                            'Max Inventory': max_inventory[grade],
-                            'Status': 'OK' if min_inventory[grade] <= final_inv <= max_inventory[grade] else 'OUT OF RANGE'
-                        })
-                    pd.DataFrame(inventory_summary).to_excel(writer, sheet_name='Inventory Summary', index=False)
-                
-                output.seek(0)
-                
-                st.download_button(
-                    label="📥 Download Excel Report",
-                    data=output,
-                    file_name="production_schedule_results.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
+
             else:
                 st.error("No solutions found during optimization. Please check your constraints and data.")
     
