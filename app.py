@@ -271,7 +271,26 @@ if uploaded_file:
             min_inventory = {row['Grade Name']: row['Min. Inventory'] for index, row in inventory_df.iterrows()}
             max_inventory = {row['Grade Name']: row['Max. Inventory'] for index, row in inventory_df.iterrows()}
             min_run_days = {row['Grade Name']: int(row['Min. Run Days']) if pd.notna(row['Min. Run Days']) else 1 for index, row in inventory_df.iterrows()}
-            force_start_date = {row['Grade Name']: pd.to_datetime(row['Force Start Date']).date() if pd.notna(row['Force Start Date']) else None for index, row in inventory_df.iterrows()}
+            
+            # SAFELY handle optional columns
+            force_start_date = {}
+            min_closing_inventory = {}
+            
+            for index, row in inventory_df.iterrows():
+                grade = row['Grade Name']
+                
+                # Handle Force Start Date (optional column)
+                if 'Force Start Date' in inventory_df.columns:
+                    force_start_date[grade] = pd.to_datetime(row['Force Start Date']).date() if pd.notna(row['Force Start Date']) else None
+                else:
+                    force_start_date[grade] = None
+                
+                # Handle Min Closing Inventory (optional column)  
+                if 'Min. Closing Inventory' in inventory_df.columns:
+                    min_closing_inventory[grade] = row['Min. Closing Inventory'] if pd.notna(row['Min. Closing Inventory']) else 0
+                else:
+                    min_closing_inventory[grade] = 0
+            
             allowed_lines = {
                 row['Grade Name']: [x.strip() for x in str(row['Plant']).split(',')] if pd.notna(row['Plant']) else lines
                 for index, row in inventory_df.iterrows()
@@ -286,7 +305,15 @@ if uploaded_file:
                     rerun_allowed[row['Grade Name']] = False
             
             max_run_days = {row['Grade Name']: int(row['Max. Run Days']) if pd.notna(row['Max. Run Days']) else 9999 for index, row in inventory_df.iterrows()}
-            min_closing_inventory = {row['Grade Name']: row['Min. Closing Inventory'] if pd.notna(row['Min. Closing Inventory']) else 0 for index, row in inventory_df.iterrows()}
+            
+            # Handle Material Running info (optional columns in Plant sheet)
+            material_running_info = {}
+            if 'Material Running' in plant_df.columns and 'Expected Run Days' in plant_df.columns:
+                material_running_info = {
+                    row['Plant']: (row['Material Running'], int(row['Expected Run Days']))
+                    for index, row in plant_df.iterrows()
+                    if pd.notna(row['Material Running']) and pd.notna(row['Expected Run Days'])
+                }
             
             # Process demand data
             demand_data = {}
