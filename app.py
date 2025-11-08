@@ -15,6 +15,74 @@ from openpyxl.styles import Font, Border, Side
 import tempfile
 import os
 
+def create_sample_workbook():
+    """Create a sample Excel workbook with the required format"""
+    output = io.BytesIO()
+    
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Plant sheet
+        plant_data = {
+            'Plant': ['PP1', 'PP2'],
+            'Capacity per day': [1500, 1000],
+            'Material Running': ['M12RR', 'F03RR'],
+            'Expected Run Days': [1, 3]
+        }
+        pd.DataFrame(plant_data).to_excel(writer, sheet_name='Plant', index=False)
+        
+        # Inventory sheet
+        inventory_data = {
+            'Grade Name': ['F03RR', 'M12RR', 'R03RR', 'F10SR', 'Y35GR1'],
+            'Opening Inventory': [500, 16000, 3000, 1700, 2500],
+            'Min. Closing Inventory': [5000, 5000, 5000, 1500, 2000],
+            'Min. Inventory': [500, 1000, 1000, 0, 0],
+            'Max. Inventory': [20000, 20000, 20000, 6000, 6000],
+            'Min. Run Days': [5, 1, 1, 3, 2],
+            'Max. Run Days': [6, 6, 6, 5, 5],
+            'Increment Days': ['', '', '', '', ''],
+            'Force Start Date': ['', '', '', '', ''],
+            'Lines': ['PP1, PP2', 'PP1, PP2', 'PP1, PP2', 'PP1, PP2', 'PP2'],
+            'Rerun Allowed': ['Yes', 'Yes', 'Yes', 'No', 'No']
+        }
+        pd.DataFrame(inventory_data).to_excel(writer, sheet_name='Inventory', index=False)
+        
+        # Demand sheet
+        dates = pd.date_range('2025-11-01', periods=30, freq='D')
+        demand_data = {
+            'Date': dates,
+            'F03RR': [600] * 30,
+            'M12RR': [500] * 30,
+            'R03RR': [850] * 30,
+            'F10SR': [400] * 30,
+            'Y35GR1': [150] * 30
+        }
+        pd.DataFrame(demand_data).to_excel(writer, sheet_name='Demand', index=False)
+        
+        # Transition matrices
+        # PP1 transition matrix
+        pp1_transition = {
+            'From': ['F03RR', 'M12RR', 'R03RR', 'F10SR'],
+            'F03RR': ['Yes', 'No', 'Yes', 'No'],
+            'M12RR': ['No', 'Yes', 'Yes', 'Yes'],
+            'R03RR': ['Yes', 'Yes', 'Yes', 'Yes'],
+            'F10SR': ['No', 'Yes', 'Yes', 'Yes']
+        }
+        pd.DataFrame(pp1_transition).to_excel(writer, sheet_name='Transition_PP1', index=False)
+        
+        # PP2 transition matrix
+        pp2_transition = {
+            'From': ['F03RR', 'M12RR', 'R03RR', 'F10SR', 'Y35GR1'],
+            'F03RR': ['Yes', 'No', 'Yes', 'Yes', 'No'],
+            'M12RR': ['No', 'Yes', 'Yes', 'Yes', 'Yes'],
+            'R03RR': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
+            'F10SR': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
+            'Y35GR1': ['No', 'Yes', 'No', 'No', 'Yes']
+        }
+        pd.DataFrame(pp2_transition).to_excel(writer, sheet_name='Transition_PP2', index=False)
+    
+    output.seek(0)
+    return output
+
+
 # Set page configuration
 st.set_page_config(
     page_title="Polymer Production Scheduler",
@@ -828,13 +896,38 @@ else:
         <li>Upload an Excel file with the required sheets (Plant, Inventory, Demand)</li>
         <li>Configure optimization parameters in the sidebar</li>
         <li>Run the optimization and view results</li>
-        <li>Download the production schedule report</li>
     </ol>
     </div>
     """, unsafe_allow_html=True)
     
+    # Create sample workbook
+    sample_workbook = create_sample_workbook()
+    
+    # Download sample file section
+    st.markdown("---")
+    st.markdown('<div class="section-header">📥 Get Started with Sample Template</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("""
+        **Download our sample template file to get started quickly:**
+        - Includes all required sheets with proper formatting
+        - Contains sample data that you can modify
+        - Ready-to-use structure for the optimization
+        """)
+    
+    with col2:
+        st.download_button(
+            label="📥 Download Sample Template",
+            data=sample_workbook,
+            file_name="polymer_production_template.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+    
     # Sample file format guide
-    with st.expander("📋 Required Excel File Format"):
+    with st.expander("📋 Required Excel File Format Details"):
         st.markdown("""
         Your Excel file should contain the following sheets with these exact column headers:
         
