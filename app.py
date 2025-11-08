@@ -766,57 +766,64 @@ if uploaded_file:
 
                 # Create production charts for each line
                 for line in lines:
-                    st.subheader(f"Production Chart - {line}")
+                st.subheader(f"Production Chart - {line}")
+                
+                # Create dataframe for this line's production
+                line_data = []
+                for d in range(num_days):
+                    date = dates[d]
+                    for grade in grades:
+                        if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
+                            line_data.append({
+                                'Date': date,
+                                'Day': d + 1,  # Add day number starting from 1
+                                'Grade': grade,
+                                'Production': solver.Value(production[(grade, line, d)])
+                            })
+                
+                if line_data:
+                    line_df = pd.DataFrame(line_data)
+                    # Use Day instead of Date for the pivot
+                    pivot_df = line_df.pivot_table(index='Day', columns='Grade', values='Production', aggfunc='sum').fillna(0)
                     
-                    # Create dataframe for this line's production
-                    line_data = []
-                    for d in range(num_days):
-                        date = dates[d]
-                        for grade in grades:
-                            if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
-                                line_data.append({
-                                    'Date': date,
-                                    'Grade': grade,
-                                    'Production': solver.Value(production[(grade, line, d)])
-                                })
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    bottom = np.zeros(len(pivot_df))
                     
-                    if line_data:
-                        line_df = pd.DataFrame(line_data)
-                        pivot_df = line_df.pivot_table(index='Date', columns='Grade', values='Production', aggfunc='sum').fillna(0)
-                        
-                        fig, ax = plt.subplots(figsize=(12, 6))
-                        bottom = np.zeros(len(pivot_df))
-                        
-                        for grade in pivot_df.columns:
-                            ax.bar(pivot_df.index, pivot_df[grade], bottom=bottom, label=grade, color=grade_colors[grade])
-                            bottom += pivot_df[grade].values
-                        
-                        ax.set_title(f'Production Schedule - {line}')
-                        ax.set_xlabel('Date')
-                        ax.set_ylabel('Production Volume')
-                        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-                        plt.xticks(rotation=45)
-                        plt.tight_layout()
-                        st.pyplot(fig)
+                    for grade in pivot_df.columns:
+                        ax.bar(pivot_df.index, pivot_df[grade], bottom=bottom, label=grade, color=grade_colors[grade])
+                        bottom += pivot_df[grade].values
+                    
+                    ax.set_title(f'Production Schedule - {line}')
+                    ax.set_xlabel('Day')
+                    ax.set_ylabel('Production Volume')
+                    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+                    
+                    # Set x-axis to show all day numbers
+                    ax.set_xticks(range(1, num_days + 1))
+                    ax.set_xticklabels(range(1, num_days + 1))
+                    
+                    plt.tight_layout()
+                    st.pyplot(fig)
 
                 # Create inventory charts
                 st.subheader("Inventory Levels")
                 
-                for grade in grades[:3]:  # Show first 3 grades to avoid clutter
+                for grade in grades:  # Show first 3 grades to avoid clutter
                     inventory_values = []
                     for d in range(num_days):
                         inventory_values.append(solver.Value(inventory_vars[(grade, d)]))
                     
                     fig, ax = plt.subplots(figsize=(12, 4))
-                    ax.plot(dates[:num_days], inventory_values, marker='o', label=grade, color=grade_colors[grade])
+                    day_numbers = list(range(1, num_days + 1))
+                    ax.plot(day_numbers, inventory_values, marker='o', label=grade, color=grade_colors[grade])
                     ax.axhline(y=min_inventory[grade], color='red', linestyle='--', label='Min Inventory')
                     ax.axhline(y=max_inventory[grade], color='green', linestyle='--', label='Max Inventory')
                     ax.set_title(f'Inventory Level - {grade}')
-                    ax.set_xlabel('Date')
+                    ax.set_xlabel('Day')
                     ax.set_ylabel('Inventory Volume')
                     ax.legend()
                     ax.grid(True, alpha=0.3)
-                    plt.xticks(rotation=45)
+                    plt.xticks(day_numbers)  # Show all day numbers
                     plt.tight_layout()
                     st.pyplot(fig)
 
