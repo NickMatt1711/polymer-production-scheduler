@@ -8,6 +8,12 @@ import time
 import io
 from matplotlib import colormaps
 import matplotlib.colors as mcolors
+import base64
+from openpyxl import load_workbook
+from openpyxl.drawing.image import Image as XLImage
+from openpyxl.styles import Font, Border, Side
+import tempfile
+import os
 
 # Set page configuration
 st.set_page_config(
@@ -45,6 +51,9 @@ st.markdown("""
         background-color: #d1ecf1;
         border: 1px solid #bee5eb;
         color: #0c5460;
+    }
+    .stProgress > div > div > div > div {
+        background-color: #1f77b4;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -169,24 +178,48 @@ with st.sidebar:
         st.success("✅ File uploaded successfully!")
         
         st.header("⚙️ Optimization Parameters")
-        time_limit_min = st.number_input("Time limit (minutes)", min_value=1, max_value=120, value=5)
-        buffer_days = st.number_input("Buffer days", min_value=0, max_value=7, value=3)
-        stockout_penalty = st.number_input("Stockout penalty", min_value=1, value=10)
-        transition_penalty = st.number_input("Transition penalty", min_value=1, value=10)
-        continuity_bonus = st.number_input("Continuity bonus", min_value=0, value=1)
+        time_limit_min = st.number_input(
+            "Time limit (minutes)",
+            min_value=1,
+            max_value=120,
+            value=10,
+            help="Maximum time to run the optimization"
+        )
+        
+        buffer_days = st.number_input(
+            "Buffer days",
+            min_value=0,
+            max_value=7,
+            value=3,
+            help="Additional days for planning buffer"
+        )
+        
+        stockout_penalty = st.number_input(
+            "Stockout penalty",
+            min_value=1,
+            value=10,
+            help="Penalty weight for stockouts in objective function"
+        )
+        
+        transition_penalty = st.number_input(
+            "Transition penalty", 
+            min_value=1,
+            value=10,
+            help="Penalty weight for production line transitions"
+        )
+        
+        continuity_bonus = st.number_input(
+            "Continuity bonus",
+            min_value=0,
+            value=1,
+            help="Bonus for continuing the same grade (negative penalty)"
+        )
 
 # Main content area
 if uploaded_file:
     try:
-        # Read the Excel file
+        # Load data
         excel_file = io.BytesIO(uploaded_file.read())
-        
-        # Read sheets
-        plant_df = pd.read_excel(excel_file, sheet_name='Plant')
-        excel_file.seek(0)
-        inventory_df = pd.read_excel(excel_file, sheet_name='Inventory')
-        excel_file.seek(0)
-        demand_df = pd.read_excel(excel_file, sheet_name='Demand')
         
         # Show data preview
         st.markdown('<div class="section-header">📊 Data Preview</div>', unsafe_allow_html=True)
@@ -194,14 +227,19 @@ if uploaded_file:
         col1, col2, col3 = st.columns(3)
         
         with col1:
+            plant_df = pd.read_excel(excel_file, sheet_name='Plant')
             st.subheader("Plant Data")
             st.dataframe(plant_df, use_container_width=True)
         
         with col2:
+            excel_file.seek(0)
+            inventory_df = pd.read_excel(excel_file, sheet_name='Inventory')
             st.subheader("Inventory Data")
             st.dataframe(inventory_df, use_container_width=True)
         
         with col3:
+            excel_file.seek(0)
+            demand_df = pd.read_excel(excel_file, sheet_name='Demand')
             st.subheader("Demand Data")
             st.dataframe(demand_df, use_container_width=True)
         
@@ -226,11 +264,19 @@ if uploaded_file:
             
             progress_bar = st.progress(0)
             status_text = st.empty()
+            results_placeholder = st.empty()
             
-            # Data preprocessing (FIXED VERSION)
+            # Initialize session state for solutions
+            if 'solutions' not in st.session_state:
+                st.session_state.solutions = []
+            if 'best_solution' not in st.session_state:
+                st.session_state.best_solution = None
+            
+            # Data preprocessing
             status_text.markdown('<div class="info-box">🔄 Preprocessing data...</div>', unsafe_allow_html=True)
             progress_bar.progress(10)
             
+            # Data preprocessing (from your original code)
             num_lines = len(plant_df)
             lines = list(plant_df['Plant'])
             capacities = {row['Plant']: row['Capacity per day'] for index, row in plant_df.iterrows()}
@@ -239,31 +285,12 @@ if uploaded_file:
             min_inventory = {row['Grade Name']: row['Min. Inventory'] for index, row in inventory_df.iterrows()}
             max_inventory = {row['Grade Name']: row['Max. Inventory'] for index, row in inventory_df.iterrows()}
             min_run_days = {row['Grade Name']: int(row['Min. Run Days']) if pd.notna(row['Min. Run Days']) else 1 for index, row in inventory_df.iterrows()}
-
-            # SAFELY handle optional columns
-            force_start_date = {}
-            min_closing_inventory = {}
-
-            for index, row in inventory_df.iterrows():
-                grade = row['Grade Name']
-                
-                # Handle Force Start Date (optional column)
-                if 'Force Start Date' in inventory_df.columns:
-                    force_start_date[grade] = pd.to_datetime(row['Force Start Date']).date() if pd.notna(row['Force Start Date']) else None
-                else:
-                    force_start_date[grade] = None
-                
-                # Handle Min Closing Inventory (optional column)  
-                if 'Min. Closing Inventory' in inventory_df.columns:
-                    min_closing_inventory[grade] = row['Min. Closing Inventory'] if pd.notna(row['Min. Closing Inventory']) else 0
-                else:
-                    min_closing_inventory[grade] = 0
-
+            force_start_date = {row['Grade Name']: pd.to_datetime(row['Force Start Date']).date() if pd.notna(row['Force Start Date']) else None for index, row in inventory_df.iterrows()}
             allowed_lines = {
                 row['Grade Name']: [x.strip() for x in str(row['Plant']).split(',')] if pd.notna(row['Plant']) else lines
                 for index, row in inventory_df.iterrows()
             }
-
+            
             rerun_allowed = {}
             for index, row in inventory_df.iterrows():
                 rerun_val = row['Rerun Allowed']
@@ -271,18 +298,10 @@ if uploaded_file:
                     rerun_allowed[row['Grade Name']] = True
                 else:
                     rerun_allowed[row['Grade Name']] = False
-
+            
             max_run_days = {row['Grade Name']: int(row['Max. Run Days']) if pd.notna(row['Max. Run Days']) else 9999 for index, row in inventory_df.iterrows()}
-
-            # Handle Material Running info (optional columns in Plant sheet)
-            material_running_info = {}
-            if 'Material Running' in plant_df.columns and 'Expected Run Days' in plant_df.columns:
-                material_running_info = {
-                    row['Plant']: (row['Material Running'], int(row['Expected Run Days']))
-                    for index, row in plant_df.iterrows()
-                    if pd.notna(row['Material Running']) and pd.notna(row['Expected Run Days'])
-                }
-
+            min_closing_inventory = {row['Grade Name']: row['Min. Closing Inventory'] if pd.notna(row['Min. Closing Inventory']) else 0 for index, row in inventory_df.iterrows()}
+            
             # Process demand data
             demand_data = {}
             dates = sorted(list(set(demand_df.iloc[:, 0].dt.date.tolist())))
@@ -358,7 +377,13 @@ if uploaded_file:
                             producing_vars.append(is_producing[(grade, line, d)])
                     model.Add(sum(producing_vars) <= 1)
 
-            # Handle Material Running (only if data exists)
+            # Handle Material Running
+            material_running_info = {
+                row['Plant']: (row['Material Running'], int(row['Expected Run Days']))
+                for index, row in plant_df.iterrows()
+                if pd.notna(row['Material Running']) and pd.notna(row['Expected Run Days'])
+            }
+
             for plant, (material, expected_days) in material_running_info.items():
                 for d in range(min(expected_days, num_days)):
                     model.Add(is_producing[(material, plant, d)] == 1)
@@ -424,7 +449,7 @@ if uploaded_file:
                 for d in range(num_days - buffer_days, num_days):
                     model.Add(sum(production[(grade, line, d)] for grade in grades if (grade, line, d) in production) <= capacities[line])
 
-            # Force Start Date (only if specified)
+            # Force Start Date
             for grade in grades:
                 if force_start_date[grade]:
                     try:
@@ -635,6 +660,27 @@ if uploaded_file:
                         plt.tight_layout()
                         st.pyplot(fig)
 
+                # Create inventory charts
+                st.subheader("Inventory Levels")
+                
+                for grade in grades[:3]:  # Show first 3 grades to avoid clutter
+                    inventory_values = []
+                    for d in range(num_days):
+                        inventory_values.append(solver.Value(inventory_vars[(grade, d)]))
+                    
+                    fig, ax = plt.subplots(figsize=(12, 4))
+                    ax.plot(dates[:num_days], inventory_values, marker='o', label=grade, color=grade_colors[grade])
+                    ax.axhline(y=min_inventory[grade], color='red', linestyle='--', label='Min Inventory')
+                    ax.axhline(y=max_inventory[grade], color='green', linestyle='--', label='Max Inventory')
+                    ax.set_title(f'Inventory Level - {grade}')
+                    ax.set_xlabel('Date')
+                    ax.set_ylabel('Inventory Volume')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    plt.xticks(rotation=45)
+                    plt.tight_layout()
+                    st.pyplot(fig)
+
                 # Download results
                 st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
                 
@@ -651,6 +697,19 @@ if uploaded_file:
                     # Write production schedule
                     if schedule_data:
                         pd.DataFrame(schedule_data).to_excel(writer, sheet_name='Production Schedule', index=False)
+                    
+                    # Write inventory summary
+                    inventory_summary = []
+                    for grade in grades:
+                        final_inv = solver.Value(inventory_vars[(grade, num_days)])
+                        inventory_summary.append({
+                            'Grade': grade,
+                            'Final Inventory': final_inv,
+                            'Min Inventory': min_inventory[grade],
+                            'Max Inventory': max_inventory[grade],
+                            'Status': 'OK' if min_inventory[grade] <= final_inv <= max_inventory[grade] else 'OUT OF RANGE'
+                        })
+                    pd.DataFrame(inventory_summary).to_excel(writer, sheet_name='Inventory Summary', index=False)
                 
                 output.seek(0)
                 
@@ -673,7 +732,13 @@ else:
     st.markdown("""
     <div class="info-box">
     <h3>Welcome to the Polymer Production Scheduler! 🏭</h3>
-    <p>This application helps optimize your polymer production schedule.</p>
+    <p>This application helps optimize your polymer production schedule by:</p>
+    <ul>
+        <li>📊 Analyzing plant capacities and inventory constraints</li>
+        <li>⚡ Optimizing production sequences to minimize transitions</li>
+        <li>📈 Balancing inventory levels and meeting demand</li>
+        <li>💾 Generating detailed production schedules and reports</li>
+    </ul>
     <p><strong>To get started:</strong></p>
     <ol>
         <li>Upload an Excel file with the required sheets (Plant, Inventory, Demand)</li>
@@ -683,6 +748,38 @@ else:
     </ol>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Sample file format guide
+    with st.expander("📋 Required Excel File Format"):
+        st.markdown("""
+        Your Excel file should contain the following sheets:
+        
+        **1. Plant Sheet**
+        - `Plant`: Plant names
+        - `Capacity per day`: Daily production capacity
+        - `Material Running`: Currently running material (optional)
+        - `Expected Run Days`: Expected run days (optional)
+        
+        **2. Inventory Sheet**
+        - `Grade Name`: Material grades
+        - `Opening Inventory`: Starting inventory levels
+        - `Min. Inventory`: Minimum inventory requirements
+        - `Max. Inventory`: Maximum inventory capacity
+        - `Min. Run Days`: Minimum consecutive run days
+        - `Force Start Date`: Mandatory start dates (optional)
+        - `Plant`: Allowed production lines
+        - `Rerun Allowed`: Whether rerun is allowed
+        
+        **3. Demand Sheet**
+        - First column: Dates
+        - Subsequent columns: Demand for each grade
+        
+        **4. Transition Sheets (optional)**
+        - `Transition_[PlantName]`: Transition rules for each plant
+        - Rows: Previous grade
+        - Columns: Next grade
+        - Values: "yes" for allowed transitions
+        """)
 
 # Footer
 st.markdown("---")
