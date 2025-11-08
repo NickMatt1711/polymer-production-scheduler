@@ -335,13 +335,19 @@ if uploaded_file:
                 max_inventory = {row['Grade Name']: row['Max. Inventory'] for index, row in inventory_df.iterrows()}
                 min_run_days = {row['Grade Name']: int(row['Min. Run Days']) if pd.notna(row['Min. Run Days']) else 1 for index, row in inventory_df.iterrows()}
                 force_start_date = {row['Grade Name']: pd.to_datetime(row['Force Start Date']).date() if pd.notna(row['Force Start Date']) else None for index, row in inventory_df.iterrows()}
-
-                # Fix: Changed from 'Plant' to 'Lines' column
-                allowed_lines = {
-                    row['Grade Name']: [x.strip() for x in str(row['Lines']).split(',')] if pd.notna(row['Lines']) else lines
-                    for index, row in inventory_df.iterrows()
-                }
-
+            
+                # FIXED: Changed from 'Plant' to 'Lines' column and handle None values properly
+                allowed_lines = {}
+                for index, row in inventory_df.iterrows():
+                    grade = row['Grade Name']
+                    lines_value = row['Lines']
+                    if pd.notna(lines_value) and lines_value != '':
+                        # Split by comma and strip whitespace
+                        allowed_lines[grade] = [x.strip() for x in str(lines_value).split(',')]
+                    else:
+                        # If no lines specified, allow all lines
+                        allowed_lines[grade] = lines
+            
                 rerun_allowed = {}
                 for index, row in inventory_df.iterrows():
                     rerun_val = row['Rerun Allowed']
@@ -349,21 +355,28 @@ if uploaded_file:
                         rerun_allowed[row['Grade Name']] = True
                     else:
                         rerun_allowed[row['Grade Name']] = False
-
+            
                 max_run_days = {row['Grade Name']: int(row['Max. Run Days']) if pd.notna(row['Max. Run Days']) else 9999 for index, row in inventory_df.iterrows()}
                 min_closing_inventory = {row['Grade Name']: row['Min. Closing Inventory'] if pd.notna(row['Min. Closing Inventory']) else 0 for index, row in inventory_df.iterrows()}
-
+            
                 # Fix: Material running info - use correct column names
-                material_running_info = {
-                    row['Plant']: (row['Material Running'], int(row['Expected Run Days']))
-                    for index, row in plant_df.iterrows()
-                    if pd.notna(row['Material Running']) and pd.notna(row['Expected Run Days'])
-                }
+                material_running_info = {}
+                for index, row in plant_df.iterrows():
+                    if pd.notna(row['Material Running']) and pd.notna(row['Expected Run Days']):
+                        material_running_info[row['Plant']] = (row['Material Running'], int(row['Expected Run Days']))
+                
+                # Debug: Show allowed lines to verify
+                st.sidebar.markdown("---")
+                st.sidebar.subheader("🔍 Allowed Lines Validation")
+                for grade in grades:
+                    st.sidebar.write(f"{grade}: {allowed_lines[grade]}")
                 
                 st.sidebar.success("✅ Data preprocessing completed successfully!")
                 
             except Exception as e:
                 st.error(f"Error in data preprocessing: {str(e)}")
+                import traceback
+                st.error(f"Traceback: {traceback.format_exc()}")
                 st.stop()
             
             # Process demand data
