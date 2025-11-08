@@ -32,34 +32,18 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
-    .section-header {
-        font-size: 1.5rem;
-        color: #1f77b4;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-    }
-    .success-box {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #d4edda;
-        border: 1px solid #c3e6cb;
-        color: #155724;
-    }
-    .info-box {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #d1ecf1;
-        border: 1px solid #bee5eb;
-        color: #0c5460;
-    }
-    .stProgress > div > div > div > div {
-        background-color: #1f77b4;
+    .debug-info {
+        background-color: #fff3cd;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #ffeaa7;
+        margin: 10px 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Main title
-st.markdown('<div class="main-header">🏭 Polymer Production Scheduler</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🏭 Polymer Production Scheduler - DEBUG MODE</div>', unsafe_allow_html=True)
 
 # Solution callback class
 class SolutionCallback(cp_model.CpSolverSolutionCallback):
@@ -178,70 +162,72 @@ with st.sidebar:
         st.success("✅ File uploaded successfully!")
         
         st.header("⚙️ Optimization Parameters")
-        time_limit_min = st.number_input(
-            "Time limit (minutes)",
-            min_value=1,
-            max_value=120,
-            value=10,
-            help="Maximum time to run the optimization"
-        )
-        
-        buffer_days = st.number_input(
-            "Buffer days",
-            min_value=0,
-            max_value=7,
-            value=3,
-            help="Additional days for planning buffer"
-        )
-        
-        stockout_penalty = st.number_input(
-            "Stockout penalty",
-            min_value=1,
-            value=10,
-            help="Penalty weight for stockouts in objective function"
-        )
-        
-        transition_penalty = st.number_input(
-            "Transition penalty", 
-            min_value=1,
-            value=10,
-            help="Penalty weight for production line transitions"
-        )
-        
-        continuity_bonus = st.number_input(
-            "Continuity bonus",
-            min_value=0,
-            value=1,
-            help="Bonus for continuing the same grade (negative penalty)"
-        )
+        time_limit_min = st.number_input("Time limit (minutes)", min_value=1, max_value=120, value=5)
+        buffer_days = st.number_input("Buffer days", min_value=0, max_value=7, value=3)
+        stockout_penalty = st.number_input("Stockout penalty", min_value=1, value=10)
+        transition_penalty = st.number_input("Transition penalty", min_value=1, value=10)
+        continuity_bonus = st.number_input("Continuity bonus", min_value=0, value=1)
 
 # Main content area
 if uploaded_file:
     try:
-        # Load data
+        # DEBUG: Show file info
+        st.markdown("### 🔍 Debug Information")
+        st.write(f"File name: {uploaded_file.name}")
+        st.write(f"File size: {uploaded_file.size} bytes")
+        
+        # Read the Excel file
         excel_file = io.BytesIO(uploaded_file.read())
         
-        # Show data preview
-        st.markdown('<div class="section-header">📊 Data Preview</div>', unsafe_allow_html=True)
+        # DEBUG: List all sheets in the file
+        xl = pd.ExcelFile(excel_file)
+        st.write("Sheets found in the file:", xl.sheet_names)
         
-        col1, col2, col3 = st.columns(3)
+        # Reset file pointer
+        excel_file.seek(0)
         
-        with col1:
+        # Try to read each sheet with detailed error handling
+        st.markdown("### 📊 Reading Sheets...")
+        
+        # Read Plant sheet
+        try:
             plant_df = pd.read_excel(excel_file, sheet_name='Plant')
-            st.subheader("Plant Data")
-            st.dataframe(plant_df, use_container_width=True)
+            st.success("✅ Plant sheet read successfully")
+            st.write("Plant DataFrame shape:", plant_df.shape)
+            st.write("Plant DataFrame columns:", plant_df.columns.tolist())
+            st.write("Plant data:")
+            st.dataframe(plant_df)
+        except Exception as e:
+            st.error(f"❌ Error reading Plant sheet: {e}")
+            # Try alternative sheet names
+            try:
+                excel_file.seek(0)
+                plant_df = pd.read_excel(excel_file, sheet_name=0)  # First sheet
+                st.success("✅ Read Plant sheet as first sheet")
+                st.dataframe(plant_df)
+            except Exception as e2:
+                st.error(f"❌ Alternative method also failed: {e2}")
+                raise e
         
-        with col2:
-            excel_file.seek(0)
+        # Read Inventory sheet
+        excel_file.seek(0)
+        try:
             inventory_df = pd.read_excel(excel_file, sheet_name='Inventory')
-            st.subheader("Inventory Data")
-            st.dataframe(inventory_df, use_container_width=True)
-        
-        with col3:
-            excel_file.seek(0)
-            demand_df = pd.read_excel(excel_file, sheet_name='Demand')
-            st.subheader("Demand Data")
-            st.dataframe(demand_df, use_container_width=True)
+            st.success("✅ Inventory sheet read successfully")
+            st.write("Inventory DataFrame shape:", inventory_df.shape)
+            st.write("Inventory DataFrame columns:", inventory_df.columns.tolist())
+            st.write("Inventory data:")
+            st.dataframe(inventory_df)
+        except Exception as e:
+            st.error(f"❌ Error reading Inventory sheet: {e}")
+            try:
+                excel_file.seek(0)
+                inventory_df = pd.read_excel(excel_file, sheet_name=1)  # Second sheet
+                st.success("✅ Read Inventory sheet as second sheet")
+                st.dataframe(inventory_df)
+            except Exception as e2:
+                st.error(f"❌ Alternative method also failed: {e2}")
+                raise e
         
         # Load transition matrices
         excel_file.seek(0)
@@ -724,30 +710,17 @@ if uploaded_file:
                 st.error("No solutions found during optimization. Please check your constraints and data.")
     
     except Exception as e:
-        st.error(f"Error processing file: {str(e)}")
-        st.info("Please make sure your Excel file has the required sheets: 'Plant', 'Inventory', and 'Demand'")
+        st.error(f"❌ Overall error: {str(e)}")
+        st.markdown("""
+        ### 🛠️ Troubleshooting Steps:
+        1. **Check sheet names** - Make sure they are exactly: 'Plant', 'Inventory', 'Demand'
+        2. **Remove formulas** - All cells should contain values, not formulas
+        3. **Check file format** - Save as .xlsx (not .xls)
+        4. **Try a simple test file** - Create a minimal file with just the basic data
+        """)
 
 else:
-    # Welcome message when no file is uploaded
-    st.markdown("""
-    <div class="info-box">
-    <h3>Welcome to the Polymer Production Scheduler! 🏭</h3>
-    <p>This application helps optimize your polymer production schedule by:</p>
-    <ul>
-        <li>📊 Analyzing plant capacities and inventory constraints</li>
-        <li>⚡ Optimizing production sequences to minimize transitions</li>
-        <li>📈 Balancing inventory levels and meeting demand</li>
-        <li>💾 Generating detailed production schedules and reports</li>
-    </ul>
-    <p><strong>To get started:</strong></p>
-    <ol>
-        <li>Upload an Excel file with the required sheets (Plant, Inventory, Demand)</li>
-        <li>Configure optimization parameters in the sidebar</li>
-        <li>Run the optimization and view results</li>
-        <li>Download the production schedule report</li>
-    </ol>
-    </div>
-    """, unsafe_allow_html=True)
+    st.info("📁 Please upload an Excel file to begin debugging")
     
     # Sample file format guide
     with st.expander("📋 Required Excel File Format"):
