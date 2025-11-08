@@ -8,12 +8,6 @@ import time
 import io
 from matplotlib import colormaps
 import matplotlib.colors as mcolors
-import base64
-from openpyxl import load_workbook
-from openpyxl.drawing.image import Image as XLImage
-from openpyxl.styles import Font, Border, Side
-import tempfile
-import os
 
 # Set page configuration
 st.set_page_config(
@@ -32,18 +26,31 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
-    .debug-info {
-        background-color: #fff3cd;
-        padding: 10px;
-        border-radius: 5px;
-        border: 1px solid #ffeaa7;
-        margin: 10px 0;
+    .section-header {
+        font-size: 1.5rem;
+        color: #1f77b4;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+    }
+    .success-box {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+    .info-box {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        background-color: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Main title
-st.markdown('<div class="main-header">🏭 Polymer Production Scheduler - DEBUG MODE</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🏭 Polymer Production Scheduler</div>', unsafe_allow_html=True)
 
 # Solution callback class
 class SolutionCallback(cp_model.CpSolverSolutionCallback):
@@ -171,63 +178,32 @@ with st.sidebar:
 # Main content area
 if uploaded_file:
     try:
-        # DEBUG: Show file info
-        st.markdown("### 🔍 Debug Information")
-        st.write(f"File name: {uploaded_file.name}")
-        st.write(f"File size: {uploaded_file.size} bytes")
-        
         # Read the Excel file
         excel_file = io.BytesIO(uploaded_file.read())
         
-        # DEBUG: List all sheets in the file
-        xl = pd.ExcelFile(excel_file)
-        st.write("Sheets found in the file:", xl.sheet_names)
-        
-        # Reset file pointer
+        # Read sheets
+        plant_df = pd.read_excel(excel_file, sheet_name='Plant')
         excel_file.seek(0)
-        
-        # Try to read each sheet with detailed error handling
-        st.markdown("### 📊 Reading Sheets...")
-        
-        # Read Plant sheet
-        try:
-            plant_df = pd.read_excel(excel_file, sheet_name='Plant')
-            st.success("✅ Plant sheet read successfully")
-            st.write("Plant DataFrame shape:", plant_df.shape)
-            st.write("Plant DataFrame columns:", plant_df.columns.tolist())
-            st.write("Plant data:")
-            st.dataframe(plant_df)
-        except Exception as e:
-            st.error(f"❌ Error reading Plant sheet: {e}")
-            # Try alternative sheet names
-            try:
-                excel_file.seek(0)
-                plant_df = pd.read_excel(excel_file, sheet_name=0)  # First sheet
-                st.success("✅ Read Plant sheet as first sheet")
-                st.dataframe(plant_df)
-            except Exception as e2:
-                st.error(f"❌ Alternative method also failed: {e2}")
-                raise e
-        
-        # Read Inventory sheet
+        inventory_df = pd.read_excel(excel_file, sheet_name='Inventory')
         excel_file.seek(0)
-        try:
-            inventory_df = pd.read_excel(excel_file, sheet_name='Inventory')
-            st.success("✅ Inventory sheet read successfully")
-            st.write("Inventory DataFrame shape:", inventory_df.shape)
-            st.write("Inventory DataFrame columns:", inventory_df.columns.tolist())
-            st.write("Inventory data:")
-            st.dataframe(inventory_df)
-        except Exception as e:
-            st.error(f"❌ Error reading Inventory sheet: {e}")
-            try:
-                excel_file.seek(0)
-                inventory_df = pd.read_excel(excel_file, sheet_name=1)  # Second sheet
-                st.success("✅ Read Inventory sheet as second sheet")
-                st.dataframe(inventory_df)
-            except Exception as e2:
-                st.error(f"❌ Alternative method also failed: {e2}")
-                raise e
+        demand_df = pd.read_excel(excel_file, sheet_name='Demand')
+        
+        # Show data preview
+        st.markdown('<div class="section-header">📊 Data Preview</div>', unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.subheader("Plant Data")
+            st.dataframe(plant_df, use_container_width=True)
+        
+        with col2:
+            st.subheader("Inventory Data")
+            st.dataframe(inventory_df, use_container_width=True)
+        
+        with col3:
+            st.subheader("Demand Data")
+            st.dataframe(demand_df, use_container_width=True)
         
         # Load transition matrices
         excel_file.seek(0)
@@ -250,19 +226,11 @@ if uploaded_file:
             
             progress_bar = st.progress(0)
             status_text = st.empty()
-            results_placeholder = st.empty()
             
-            # Initialize session state for solutions
-            if 'solutions' not in st.session_state:
-                st.session_state.solutions = []
-            if 'best_solution' not in st.session_state:
-                st.session_state.best_solution = None
-            
-            # Data preprocessing
+            # Data preprocessing (FIXED VERSION)
             status_text.markdown('<div class="info-box">🔄 Preprocessing data...</div>', unsafe_allow_html=True)
             progress_bar.progress(10)
             
-            # Data preprocessing (from your original code)
             num_lines = len(plant_df)
             lines = list(plant_df['Plant'])
             capacities = {row['Plant']: row['Capacity per day'] for index, row in plant_df.iterrows()}
@@ -271,11 +239,11 @@ if uploaded_file:
             min_inventory = {row['Grade Name']: row['Min. Inventory'] for index, row in inventory_df.iterrows()}
             max_inventory = {row['Grade Name']: row['Max. Inventory'] for index, row in inventory_df.iterrows()}
             min_run_days = {row['Grade Name']: int(row['Min. Run Days']) if pd.notna(row['Min. Run Days']) else 1 for index, row in inventory_df.iterrows()}
-            
+
             # SAFELY handle optional columns
             force_start_date = {}
             min_closing_inventory = {}
-            
+
             for index, row in inventory_df.iterrows():
                 grade = row['Grade Name']
                 
@@ -290,12 +258,12 @@ if uploaded_file:
                     min_closing_inventory[grade] = row['Min. Closing Inventory'] if pd.notna(row['Min. Closing Inventory']) else 0
                 else:
                     min_closing_inventory[grade] = 0
-            
+
             allowed_lines = {
                 row['Grade Name']: [x.strip() for x in str(row['Plant']).split(',')] if pd.notna(row['Plant']) else lines
                 for index, row in inventory_df.iterrows()
             }
-            
+
             rerun_allowed = {}
             for index, row in inventory_df.iterrows():
                 rerun_val = row['Rerun Allowed']
@@ -303,9 +271,9 @@ if uploaded_file:
                     rerun_allowed[row['Grade Name']] = True
                 else:
                     rerun_allowed[row['Grade Name']] = False
-            
+
             max_run_days = {row['Grade Name']: int(row['Max. Run Days']) if pd.notna(row['Max. Run Days']) else 9999 for index, row in inventory_df.iterrows()}
-            
+
             # Handle Material Running info (optional columns in Plant sheet)
             material_running_info = {}
             if 'Material Running' in plant_df.columns and 'Expected Run Days' in plant_df.columns:
@@ -314,7 +282,7 @@ if uploaded_file:
                     for index, row in plant_df.iterrows()
                     if pd.notna(row['Material Running']) and pd.notna(row['Expected Run Days'])
                 }
-            
+
             # Process demand data
             demand_data = {}
             dates = sorted(list(set(demand_df.iloc[:, 0].dt.date.tolist())))
@@ -390,13 +358,7 @@ if uploaded_file:
                             producing_vars.append(is_producing[(grade, line, d)])
                     model.Add(sum(producing_vars) <= 1)
 
-            # Handle Material Running
-            material_running_info = {
-                row['Plant']: (row['Material Running'], int(row['Expected Run Days']))
-                for index, row in plant_df.iterrows()
-                if pd.notna(row['Material Running']) and pd.notna(row['Expected Run Days'])
-            }
-
+            # Handle Material Running (only if data exists)
             for plant, (material, expected_days) in material_running_info.items():
                 for d in range(min(expected_days, num_days)):
                     model.Add(is_producing[(material, plant, d)] == 1)
@@ -462,7 +424,7 @@ if uploaded_file:
                 for d in range(num_days - buffer_days, num_days):
                     model.Add(sum(production[(grade, line, d)] for grade in grades if (grade, line, d) in production) <= capacities[line])
 
-            # Force Start Date
+            # Force Start Date (only if specified)
             for grade in grades:
                 if force_start_date[grade]:
                     try:
@@ -673,27 +635,6 @@ if uploaded_file:
                         plt.tight_layout()
                         st.pyplot(fig)
 
-                # Create inventory charts
-                st.subheader("Inventory Levels")
-                
-                for grade in grades[:3]:  # Show first 3 grades to avoid clutter
-                    inventory_values = []
-                    for d in range(num_days):
-                        inventory_values.append(solver.Value(inventory_vars[(grade, d)]))
-                    
-                    fig, ax = plt.subplots(figsize=(12, 4))
-                    ax.plot(dates[:num_days], inventory_values, marker='o', label=grade, color=grade_colors[grade])
-                    ax.axhline(y=min_inventory[grade], color='red', linestyle='--', label='Min Inventory')
-                    ax.axhline(y=max_inventory[grade], color='green', linestyle='--', label='Max Inventory')
-                    ax.set_title(f'Inventory Level - {grade}')
-                    ax.set_xlabel('Date')
-                    ax.set_ylabel('Inventory Volume')
-                    ax.legend()
-                    ax.grid(True, alpha=0.3)
-                    plt.xticks(rotation=45)
-                    plt.tight_layout()
-                    st.pyplot(fig)
-
                 # Download results
                 st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
                 
@@ -710,19 +651,6 @@ if uploaded_file:
                     # Write production schedule
                     if schedule_data:
                         pd.DataFrame(schedule_data).to_excel(writer, sheet_name='Production Schedule', index=False)
-                    
-                    # Write inventory summary
-                    inventory_summary = []
-                    for grade in grades:
-                        final_inv = solver.Value(inventory_vars[(grade, num_days)])
-                        inventory_summary.append({
-                            'Grade': grade,
-                            'Final Inventory': final_inv,
-                            'Min Inventory': min_inventory[grade],
-                            'Max Inventory': max_inventory[grade],
-                            'Status': 'OK' if min_inventory[grade] <= final_inv <= max_inventory[grade] else 'OUT OF RANGE'
-                        })
-                    pd.DataFrame(inventory_summary).to_excel(writer, sheet_name='Inventory Summary', index=False)
                 
                 output.seek(0)
                 
@@ -737,49 +665,24 @@ if uploaded_file:
                 st.error("No solutions found during optimization. Please check your constraints and data.")
     
     except Exception as e:
-        st.error(f"❌ Overall error: {str(e)}")
-        st.markdown("""
-        ### 🛠️ Troubleshooting Steps:
-        1. **Check sheet names** - Make sure they are exactly: 'Plant', 'Inventory', 'Demand'
-        2. **Remove formulas** - All cells should contain values, not formulas
-        3. **Check file format** - Save as .xlsx (not .xls)
-        4. **Try a simple test file** - Create a minimal file with just the basic data
-        """)
+        st.error(f"Error processing file: {str(e)}")
+        st.info("Please make sure your Excel file has the required sheets: 'Plant', 'Inventory', and 'Demand'")
 
 else:
-    st.info("📁 Please upload an Excel file to begin debugging")
-    
-    # Sample file format guide
-    with st.expander("📋 Required Excel File Format"):
-        st.markdown("""
-        Your Excel file should contain the following sheets:
-        
-        **1. Plant Sheet**
-        - `Plant`: Plant names
-        - `Capacity per day`: Daily production capacity
-        - `Material Running`: Currently running material (optional)
-        - `Expected Run Days`: Expected run days (optional)
-        
-        **2. Inventory Sheet**
-        - `Grade Name`: Material grades
-        - `Opening Inventory`: Starting inventory levels
-        - `Min. Inventory`: Minimum inventory requirements
-        - `Max. Inventory`: Maximum inventory capacity
-        - `Min. Run Days`: Minimum consecutive run days
-        - `Force Start Date`: Mandatory start dates (optional)
-        - `Plant`: Allowed production lines
-        - `Rerun Allowed`: Whether rerun is allowed
-        
-        **3. Demand Sheet**
-        - First column: Dates
-        - Subsequent columns: Demand for each grade
-        
-        **4. Transition Sheets (optional)**
-        - `Transition_[PlantName]`: Transition rules for each plant
-        - Rows: Previous grade
-        - Columns: Next grade
-        - Values: "yes" for allowed transitions
-        """)
+    # Welcome message when no file is uploaded
+    st.markdown("""
+    <div class="info-box">
+    <h3>Welcome to the Polymer Production Scheduler! 🏭</h3>
+    <p>This application helps optimize your polymer production schedule.</p>
+    <p><strong>To get started:</strong></p>
+    <ol>
+        <li>Upload an Excel file with the required sheets (Plant, Inventory, Demand)</li>
+        <li>Configure optimization parameters in the sidebar</li>
+        <li>Run the optimization and view results</li>
+        <li>Download the production schedule report</li>
+    </ol>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
