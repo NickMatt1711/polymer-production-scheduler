@@ -48,7 +48,7 @@ def create_sample_workbook():
         # Demand sheet
         dates = pd.date_range('2025-11-01', periods=30, freq='D')
         demand_data = {
-            'Date': dates,
+            'Date': [date.strftime('%d-%b-%y') for date in dates],  # Format dates here
             'F03RR': [600] * 30,
             'M12RR': [500] * 30,
             'R03RR': [850] * 30,
@@ -131,7 +131,7 @@ st.markdown('<div class="main-header">🏭 Polymer Production Scheduler</div>', 
 
 # Solution callback class
 class SolutionCallback(cp_model.CpSolverSolutionCallback):
-    def __init__(self, production, inventory, stockout, is_producing, grades, lines, dates, num_days):
+    def __init__(self, production, inventory, stockout, is_producing, grades, lines, dates, formatted_dates, num_days):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.production = production
         self.inventory = inventory
@@ -140,6 +140,7 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
         self.grades = grades
         self.lines = lines
         self.dates = dates
+        self.formatted_dates = formatted_dates
         self.num_days = num_days
         self.solutions = []
         self.solution_times = []
@@ -169,11 +170,11 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
                     if key in self.production:
                         value = self.Value(self.production[key])
                         if value > 0:
-                            date_key = self.dates[d]
+                            date_key = self.formatted_dates[d]
                             if date_key not in solution['production'][grade]:
                                 solution['production'][grade][date_key] = 0
                             solution['production'][grade][date_key] += value
-
+        
         # Extract inventory values
         for grade in self.grades:
             solution['inventory'][grade] = {}
@@ -181,10 +182,10 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
                 key = (grade, d)
                 if key in self.inventory:
                     if d < self.num_days:
-                        solution['inventory'][grade][self.dates[d] if d > 0 else 'initial'] = self.Value(self.inventory[key])
+                        solution['inventory'][grade][self.formatted_dates[d] if d > 0 else 'initial'] = self.Value(self.inventory[key])
                     else:
                         solution['inventory'][grade]['final'] = self.Value(self.inventory[key])
-
+        
         # Extract stockout values
         for grade in self.grades:
             solution['stockout'][grade] = {}
@@ -193,13 +194,13 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
                 if key in self.stockout:
                     value = self.Value(self.stockout[key])
                     if value > 0:
-                        solution['stockout'][grade][self.dates[d]] = value
-
+                        solution['stockout'][grade][self.formatted_dates[d]] = value
+        
         # Extract production schedule
         for line in self.lines:
             solution['is_producing'][line] = {}
             for d in range(self.num_days):
-                date_key = self.dates[d]
+                date_key = self.formatted_dates[d]
                 solution['is_producing'][line][date_key] = None
                 for grade in self.grades:
                     key = (grade, line, d)
@@ -375,18 +376,96 @@ if uploaded_file:
             progress_bar.progress(10)
             
             try:
-                # Data preprocessing with corrected column names
+                # Data preprocessing with corrected column names and default values
                 num_lines = len(plant_df)
                 lines = list(plant_df['Plant'])
                 capacities = {row['Plant']: row['Capacity per day'] for index, row in plant_df.iterrows()}
                 grades = list(inventory_df['Grade Name'])
                 
-                # Fix: Use correct column names from your Excel file
-                initial_inventory = {row['Grade Name']: row['Opening Inventory'] for index, row in inventory_df.iterrows()}
-                min_inventory = {row['Grade Name']: row['Min. Inventory'] for index, row in inventory_df.iterrows()}
-                max_inventory = {row['Grade Name']: row['Max. Inventory'] for index, row in inventory_df.iterrows()}
-                min_run_days = {row['Grade Name']: int(row['Min. Run Days']) if pd.notna(row['Min. Run Days']) else 1 for index, row in inventory_df.iterrows()}
-                force_start_date = {row['Grade Name']: pd.to_datetime(row['Force Start Date']).date() if pd.notna(row['Force Start Date']) else None for index, row in inventory_df.iterrows()}
+                # Enhanced inventory processing with default values
+                initial_inventory = {}
+                min_inventory = {}
+                max_inventory = {}
+                min_closing_inventory = {}
+                min_run_days = {}
+                max_run_days = {}
+                force_start_date = {}
+                allowed_lines = {}
+                rerun_allowed = {}
+                
+                for index, row in inventory_df.iterrows():
+                    grade = row['Grade Name']
+                    
+                    # Opening Inventory - default 0
+                    if pd.notna(row['Opening Inventory']):
+                        initial_inventory[grade] = row['Opening Inventory']
+                    else:
+                        initial_inventory[grade] = 0
+                        st.warning(f"⚠️ Opening Inventory for grade '{grade}' is missing, using default value: 0")
+                    
+                    # Min. Inventory - default 0
+                    if pd.notna(row['Min. Inventory']):
+                        min_inventory[grade] = row['Min. Inventory']
+                    else:
+                        min_inventory[grade] = 0
+                        st.warning(f"⚠️ Min. Inventory for grade '{grade}' is missing, using default value: 0")
+                    
+                    # Max. Inventory - default very large number (limitless)
+                    if pd.notna(row['Max. Inventory']):
+                        max_inventory[grade] = row['Max. Inventory']
+                    else:
+                        max_inventory[grade] = 1000000000  # Very large number as "limitless"
+                        st.warning(f"⚠️ Max. Inventory for grade '{grade}' is missing, using default value: 1000000000 (limitless)")
+                    
+                    # Min. Closing Inventory - default 0
+                    if pd.notna(row['Min. Closing Inventory']):
+                        min_closing_inventory[grade] = row['Min. Closing Inventory']
+                    else:
+                        min_closing_inventory[grade] = 0
+                        st.warning(f"⚠️ Min. Closing Inventory for grade '{grade}' is missing, using default value: 0")
+                    
+                    # Min. Run Days - default 1
+                    if pd.notna(row['Min. Run Days']):
+                        min_run_days[grade] = int(row['Min. Run Days'])
+                    else:
+                        min_run_days[grade] = 1
+                        st.warning(f"⚠️ Min. Run Days for grade '{grade}' is missing, using default value: 1")
+                    
+                    # Max. Run Days - default 9999 (very large)
+                    if pd.notna(row['Max. Run Days']):
+                        max_run_days[grade] = int(row['Max. Run Days'])
+                    else:
+                        max_run_days[grade] = 9999
+                        st.warning(f"⚠️ Max. Run Days for grade '{grade}' is missing, using default value: 9999")
+                    
+                    # Force Start Date
+                    if pd.notna(row['Force Start Date']):
+                        try:
+                            force_start_date[grade] = pd.to_datetime(row['Force Start Date']).date()
+                        except:
+                            force_start_date[grade] = None
+                            st.warning(f"⚠️ Force Start Date for grade '{grade}' is invalid, ignoring")
+                    else:
+                        force_start_date[grade] = None
+                    
+                    # Lines - handle None values properly
+                    lines_value = row['Lines']
+                    if pd.notna(lines_value) and lines_value != '':
+                        # Split by comma and strip whitespace
+                        allowed_lines[grade] = [x.strip() for x in str(lines_value).split(',')]
+                    else:
+                        # If no lines specified, allow all lines
+                        allowed_lines[grade] = lines
+                        st.warning(f"⚠️ Lines for grade '{grade}' are not specified, allowing all lines: {lines}")
+                    
+                    # Rerun Allowed - default 'Yes'
+                    rerun_val = row['Rerun Allowed']
+                    if pd.notna(rerun_val) and isinstance(rerun_val, str) and rerun_val.strip().lower() == 'no':
+                        rerun_allowed[grade] = False
+                    else:
+                        rerun_allowed[grade] = True
+                        if pd.isna(rerun_val) or (isinstance(rerun_val, str) and rerun_val.strip().lower() != 'yes'):
+                            st.warning(f"⚠️ Rerun Allowed for grade '{grade}' is missing or invalid, using default value: Yes")
             
                 # FIXED: Changed from 'Plant' to 'Lines' column and handle None values properly
                 allowed_lines = {}
@@ -411,11 +490,20 @@ if uploaded_file:
                 max_run_days = {row['Grade Name']: int(row['Max. Run Days']) if pd.notna(row['Max. Run Days']) else 9999 for index, row in inventory_df.iterrows()}
                 min_closing_inventory = {row['Grade Name']: row['Min. Closing Inventory'] if pd.notna(row['Min. Closing Inventory']) else 0 for index, row in inventory_df.iterrows()}
             
-                # Fix: Material running info - use correct column names
+                # Material running info with error handling
                 material_running_info = {}
                 for index, row in plant_df.iterrows():
-                    if pd.notna(row['Material Running']) and pd.notna(row['Expected Run Days']):
-                        material_running_info[row['Plant']] = (row['Material Running'], int(row['Expected Run Days']))
+                    plant = row['Plant']
+                    material = row['Material Running']
+                    expected_days = row['Expected Run Days']
+                    
+                    if pd.notna(material) and pd.notna(expected_days):
+                        try:
+                            material_running_info[plant] = (str(material).strip(), int(expected_days))
+                        except (ValueError, TypeError):
+                            st.warning(f"⚠️ Invalid Material Running or Expected Run Days for plant '{plant}', ignoring")
+                    elif pd.notna(material) or pd.notna(expected_days):
+                        st.warning(f"⚠️ Incomplete Material Running info for plant '{plant}', ignoring both fields")
                 
             except Exception as e:
                 st.error(f"Error in data preprocessing: {str(e)}")
@@ -431,6 +519,9 @@ if uploaded_file:
             for i in range(1, buffer_days + 1):
                 dates.append(last_date + timedelta(days=i))
             num_days = len(dates)
+            
+            # Convert dates to DD-MMM-YY format for display
+            formatted_dates = [date.strftime('%d-%b-%y') for date in dates]
             
             for grade in grades:
                 if grade in demand_df.columns:
@@ -760,7 +851,7 @@ if uploaded_file:
             # --- Solve the Model ---
             solver = cp_model.CpSolver()
             solver.parameters.max_time_in_seconds = time_limit_min * 60.0
-            solution_callback = SolutionCallback(production, inventory_vars, stockout_vars, is_producing, grades, lines, dates, num_days)
+            solution_callback = SolutionCallback(production, inventory_vars, stockout_vars, is_producing, grades, lines, dates, formatted_dates, num_days)
 
             # Solve with progress updates
             start_time = time.time()
@@ -868,7 +959,7 @@ if uploaded_file:
                     # Create dataframe for this line's production
                     line_data = []
                     for d in range(num_days):
-                        date = dates[d]
+                        date = formatted_dates[d]  # Use formatted date
                         for grade in grades:
                             if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
                                 line_data.append({
