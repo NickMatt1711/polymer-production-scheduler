@@ -22,16 +22,16 @@ def create_sample_workbook():
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         # Plant sheet
         plant_data = {
-            'Plant': ['PP1', 'PP2'],
+            'Plant': ['Plant1', 'Plant2'],
             'Capacity per day': [1500, 1000],
-            'Material Running': ['M12RR', 'F03RR'],
+            'Material Running': ['Moulding', 'BOPP'],
             'Expected Run Days': [1, 3]
         }
         pd.DataFrame(plant_data).to_excel(writer, sheet_name='Plant', index=False)
         
         # Inventory sheet
         inventory_data = {
-            'Grade Name': ['F03RR', 'M12RR', 'R03RR', 'F10SR', 'Y35GR1'],
+            'Grade Name': ['BOPP', 'Moulding', 'Raffia', 'TQPP', 'Yarn'],
             'Opening Inventory': [500, 16000, 3000, 1700, 2500],
             'Min. Closing Inventory': [5000, 5000, 5000, 1500, 2000],
             'Min. Inventory': [500, 1000, 1000, 0, 0],
@@ -40,44 +40,44 @@ def create_sample_workbook():
             'Max. Run Days': [6, 6, 6, 5, 5],
             'Increment Days': ['', '', '', '', ''],
             'Force Start Date': ['', '', '', '', ''],
-            'Lines': ['PP1, PP2', 'PP1, PP2', 'PP1, PP2', 'PP1, PP2', 'PP2'],
+            'Lines': ['Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant2'],
             'Rerun Allowed': ['Yes', 'Yes', 'Yes', 'No', 'No']
         }
         pd.DataFrame(inventory_data).to_excel(writer, sheet_name='Inventory', index=False)
         
-        # Demand sheet
+        # Demand sheet - ensure dates are properly formatted as datetime
         dates = pd.date_range('2025-11-01', periods=30, freq='D')
         demand_data = {
-            'Date': [date.strftime('%d-%b-%y') for date in dates],  # Format dates here
-            'F03RR': [600] * 30,
-            'M12RR': [500] * 30,
-            'R03RR': [850] * 30,
-            'F10SR': [400] * 30,
-            'Y35GR1': [150] * 30
+            'Date': dates,  # Keep as datetime objects
+            'BOPP': [600] * 30,
+            'Moulding': [500] * 30,
+            'Raffia': [850] * 30,
+            'TQPP': [400] * 30,
+            'Yarn': [150] * 30
         }
         pd.DataFrame(demand_data).to_excel(writer, sheet_name='Demand', index=False)
         
-        # Transition matrices
-        # PP1 transition matrix
-        pp1_transition = {
-            'From': ['F03RR', 'M12RR', 'R03RR', 'F10SR'],
-            'F03RR': ['Yes', 'No', 'Yes', 'No'],
-            'M12RR': ['No', 'Yes', 'Yes', 'Yes'],
-            'R03RR': ['Yes', 'Yes', 'Yes', 'Yes'],
-            'F10SR': ['No', 'Yes', 'Yes', 'Yes']
+        # Transition matrices (unchanged)
+        # Plant1 transition matrix
+        Plant1_transition = {
+            'From': ['BOPP', 'Moulding', 'Raffia', 'TQPP'],
+            'BOPP': ['Yes', 'No', 'Yes', 'No'],
+            'Moulding': ['No', 'Yes', 'Yes', 'Yes'],
+            'Raffia': ['Yes', 'Yes', 'Yes', 'Yes'],
+            'TQPP': ['No', 'Yes', 'Yes', 'Yes']
         }
-        pd.DataFrame(pp1_transition).to_excel(writer, sheet_name='Transition_PP1', index=False)
+        pd.DataFrame(Plant1_transition).to_excel(writer, sheet_name='Transition_Plant1', index=False)
         
-        # PP2 transition matrix
-        pp2_transition = {
-            'From': ['F03RR', 'M12RR', 'R03RR', 'F10SR', 'Y35GR1'],
-            'F03RR': ['Yes', 'No', 'Yes', 'Yes', 'No'],
-            'M12RR': ['No', 'Yes', 'Yes', 'Yes', 'Yes'],
-            'R03RR': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
-            'F10SR': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
-            'Y35GR1': ['No', 'Yes', 'No', 'No', 'Yes']
+        # Plant2 transition matrix
+        Plant2_transition = {
+            'From': ['BOPP', 'Moulding', 'Raffia', 'TQPP', 'Yarn'],
+            'BOPP': ['Yes', 'No', 'Yes', 'Yes', 'No'],
+            'Moulding': ['No', 'Yes', 'Yes', 'Yes', 'Yes'],
+            'Raffia': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
+            'TQPP': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
+            'Yarn': ['No', 'Yes', 'No', 'No', 'Yes']
         }
-        pd.DataFrame(pp2_transition).to_excel(writer, sheet_name='Transition_PP2', index=False)
+        pd.DataFrame(Plant2_transition).to_excel(writer, sheet_name='Transition_Plant2', index=False)
     
     output.seek(0)
     return output
@@ -335,9 +335,9 @@ if uploaded_file:
             
             # Try multiple possible sheet name formats
             possible_sheet_names = [
-                f'Transition_{plant_name}',           # Transition_PP1
-                f'Transition_{plant_name.replace(" ", "_")}',  # Transition_PP1
-                f'Transition{plant_name.replace(" ", "")}',    # TransitionPP1
+                f'Transition_{plant_name}',           # Transition_Plant1
+                f'Transition_{plant_name.replace(" ", "_")}',  # Transition_Plant1
+                f'Transition{plant_name.replace(" ", "")}',    # TransitionPlant1
             ]
             
             transition_df_found = None
@@ -1087,7 +1087,7 @@ else:
         Your Excel file should contain the following sheets with these exact column headers:
         
         **1. Plant Sheet**
-        - `Plant`: Plant names (e.g., PP1, PP2)
+        - `Plant`: Plant names (e.g., Plant1, Plant2)
         - `Capacity per day`: Daily production capacity
         - `Material Running`: Currently running material (optional)
         - `Expected Run Days`: Expected run days (optional)
@@ -1109,7 +1109,7 @@ else:
         - Subsequent columns: Demand for each grade (column names should match grade names)
         
         **4. Transition Sheets (optional)**
-        - Name format: `Transition_[PlantName]` (e.g., `Transition_PP1`, `Transition_PP2`)
+        - Name format: `Transition_[PlantName]` (e.g., `Transition_Plant1`, `Transition_Plant2`)
         - Rows: Previous grade
         - Columns: Next grade  
         - Values: "yes" for allowed transitions
