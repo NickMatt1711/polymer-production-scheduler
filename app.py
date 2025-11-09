@@ -786,6 +786,12 @@ if uploaded_file:
                     st.metric("Total Stockouts", f"{total_stockouts:,.0f} MT")
                 with col4:
                     st.metric("Planning Horizon", f"{num_days} days")
+
+                # Create color map for grades
+                cmap = colormaps.get_cmap('tab20')
+                grade_colors = {}
+                for idx, grade in enumerate(grades):
+                    grade_colors[grade] = cmap(idx % 20)
                 
                 # Total Production Quantity Table
                 st.subheader("Total Production by Grade and Plant (MT)")
@@ -855,12 +861,6 @@ if uploaded_file:
                 # Create visualization
                 st.subheader("Production Visualization")
                 
-                # Create color map for grades
-                cmap = colormaps.get_cmap('tab20')
-                grade_colors = {}
-                for idx, grade in enumerate(grades):
-                    grade_colors[grade] = cmap(idx % 20)
-
                 # Create production charts for each line
                 for line in lines:
                     st.subheader(f"Production Chart - {line}")
