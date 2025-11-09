@@ -783,12 +783,55 @@ if uploaded_file:
                     st.metric("Total Transitions", best_solution['transitions']['total'])
                 with col3:
                     total_stockouts = sum(sum(best_solution['stockout'][g].values()) for g in grades)
-                    st.metric("Total Stockouts", f"{total_stockouts:,.0f}")
+                    st.metric("Total Stockouts", f"{total_stockouts:,.0f} MT")
                 with col4:
                     st.metric("Planning Horizon", f"{num_days} days")
-
-                # Production schedule
+                
+                # Total Production Quantity Table
+                st.subheader("Total Production by Grade and Plant (MT)")
+                
+                # Calculate total production by grade and plant
+                production_totals = {}
+                grade_totals = {}
+                plant_totals = {line: 0 for line in lines}
+                
+                for grade in grades:
+                    production_totals[grade] = {}
+                    grade_totals[grade] = 0
+                    for line in lines:
+                        total_prod = 0
+                        for d in range(num_days):
+                            key = (grade, line, d)
+                            if key in production:
+                                total_prod += solver.Value(production[key])
+                        production_totals[grade][line] = total_prod
+                        grade_totals[grade] += total_prod
+                        plant_totals[line] += total_prod
+                
+                # Create DataFrame
+                total_prod_data = []
+                for grade in grades:
+                    row = {'Grade': grade}
+                    for line in lines:
+                        row[line] = production_totals[grade][line]
+                    row['Total'] = grade_totals[grade]
+                    total_prod_data.append(row)
+                
+                # Add plant totals row
+                totals_row = {'Grade': 'Total'}
+                for line in lines:
+                    totals_row[line] = plant_totals[line]
+                totals_row['Total'] = sum(plant_totals.values())
+                total_prod_data.append(totals_row)
+                
+                total_prod_df = pd.DataFrame(total_prod_data)
+                
+                # Display the table
+                st.dataframe(total_prod_df, use_container_width=True)
+                
+                # Production schedule with color coding
                 st.subheader("Production Schedule by Line")
+                
                 schedule_data = []
                 for line in lines:
                     for date, grade in best_solution['is_producing'][line].items():
@@ -797,7 +840,17 @@ if uploaded_file:
                 
                 if schedule_data:
                     schedule_df = pd.DataFrame(schedule_data)
-                    st.dataframe(schedule_df, use_container_width=True)
+                    
+                    # Create a color mapping function
+                    def color_grade(val):
+                        if val in grade_colors:
+                            color = mcolors.to_hex(grade_colors[val])
+                            return f'background-color: {color}; color: white; font-weight: bold;'
+                        return ''
+                    
+                    # Apply styling
+                    styled_schedule = schedule_df.style.applymap(color_grade, subset=['Grade'])
+                    st.dataframe(styled_schedule, use_container_width=True)
 
                 # Create visualization
                 st.subheader("Production Visualization")
@@ -839,7 +892,7 @@ if uploaded_file:
                         
                         ax.set_title(f'Production Schedule - {line}')
                         ax.set_xlabel('Day')
-                        ax.set_ylabel('Production Volume')
+                        ax.set_ylabel('Production Volume (MT)')
                         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
                         
                         # Set x-axis to show all day numbers
@@ -849,22 +902,33 @@ if uploaded_file:
                         plt.tight_layout()
                         st.pyplot(fig)
 
-                # Create inventory charts
+                # Create inventory charts with data labels
                 st.subheader("Inventory Levels")
                 
-                for grade in grades:  # Show first 3 grades to avoid clutter
+                for grade in grades: 
                     inventory_values = []
                     for d in range(num_days):
                         inventory_values.append(solver.Value(inventory_vars[(grade, d)]))
                     
                     fig, ax = plt.subplots(figsize=(12, 4))
                     day_numbers = list(range(1, num_days + 1))
-                    ax.plot(day_numbers, inventory_values, marker='o', label=grade, color=grade_colors[grade])
+                    line = ax.plot(day_numbers, inventory_values, marker='o', label=grade, color=grade_colors[grade], linewidth=2, markersize=6)
+                    
+                    # Add data labels
+                    for i, (day, inv) in enumerate(zip(day_numbers, inventory_values)):
+                        ax.annotate(f'{inv:.0f}', 
+                                   (day, inv), 
+                                   textcoords="offset points", 
+                                   xytext=(0,10), 
+                                   ha='center', 
+                                   fontsize=8,
+                                   bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="gray", alpha=0.7))
+                    
                     ax.axhline(y=min_inventory[grade], color='red', linestyle='--', label='Min Inventory')
                     ax.axhline(y=max_inventory[grade], color='green', linestyle='--', label='Max Inventory')
                     ax.set_title(f'Inventory Level - {grade}')
                     ax.set_xlabel('Day')
-                    ax.set_ylabel('Inventory Volume')
+                    ax.set_ylabel('Inventory Volume (MT)')
                     ax.legend()
                     ax.grid(True, alpha=0.3)
                     plt.xticks(day_numbers)  # Show all day numbers
