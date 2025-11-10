@@ -1087,7 +1087,7 @@ if uploaded_file:
                             return "background-color: black; color: white; font-weight: bold; text-align: center;"
                         if val in grade_color_map:
                             color = grade_color_map[val]
-                            return f'background-color: {color}; color: white; font-weight: bold; text-align: center;'
+                            return f'background-color: {grade_color_map[val]}; color: white; font-weight: bold; text-align: center;'
                         return ''
                 
                     styled_df = (
