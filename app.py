@@ -1030,7 +1030,7 @@ if uploaded_file:
                     st.dataframe(styled_schedule, use_container_width=True)
 
                 # Create visualization
-                st.subheader("Production Visualization (By Product)")
+                st.subheader("Production Visualization")
 
                 gantt_data = []
                 for line in lines:
@@ -1042,7 +1042,7 @@ if uploaded_file:
                                     "Grade": grade,
                                     "Line": line,
                                     "Start": date,
-                                    "Finish": date + timedelta(days=1)
+                                    "Finish": date + timedelta(days=1),
                                 })
                 
                 if gantt_data:
@@ -1053,21 +1053,26 @@ if uploaded_file:
                         x_start="Start",
                         x_end="Finish",
                         y="Grade",
-                        color="Line",
-                        title="Production Schedule by Grade",
+                        color="Grade",
+                        facet_row="Line",
+                        hover_data=["Line", "Grade", "Start", "Finish"],
                         color_discrete_sequence=px.colors.qualitative.Vivid,
+                        title="Production Schedule by Line and Grade"
                     )
                 
-                    fig.update_yaxes(autorange="reversed", title=None)  # show top-to-bottom order
-                    fig.update_xaxes(title="Date")
+                    fig.update_yaxes(autorange="reversed", title=None, matches=None)
+                    fig.update_xaxes(title="Date", showgrid=True)
                     fig.update_layout(
-                        height=500,
+                        height=200 * len(lines),  # auto scale height based on number of lines
                         bargap=0.2,
                         showlegend=True,
-                        legend_title_text="Production Line",
+                        legend_title_text="Grade",
                         xaxis=dict(showgrid=True),
-                        yaxis=dict(showgrid=False)
+                        margin=dict(l=40, r=40, t=60, b=40),
                     )
+                
+                    # Ensure facets don't share y-axis, for better readability
+                    fig.for_each_yaxis(lambda yaxis: yaxis.update(showgrid=False, showticklabels=True))
                 
                     st.plotly_chart(fig, use_container_width=True)
                 else:
