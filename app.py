@@ -1043,7 +1043,7 @@ if uploaded_file:
                     gantt_data = []
                     for d in range(num_days):
                         date = dates[d]
-                        for grade in sorted_grades:  # use sorted order
+                        for grade in sorted_grades:  # use sorted order for consistency
                             if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
                                 gantt_data.append({
                                     "Grade": grade,
@@ -1066,7 +1066,7 @@ if uploaded_file:
                         y="Grade",
                         color="Grade",
                         color_discrete_map=grade_color_map,
-                        category_orders={"Grade": sorted_grades},  # ensures sorted legend & axis order
+                        category_orders={"Grade": sorted_grades},
                         title=f"Production Schedule - {line}"
                     )
                 
@@ -1089,23 +1089,26 @@ if uploaded_file:
                         dtick="D1"
                     )
                 
-                    # ✅ Layout styling
+                    # ✅ Layout styling with right-aligned legend
                     fig.update_layout(
                         height=350,
                         bargap=0.2,
                         showlegend=True,
                         legend_title_text="Grade",
                         legend=dict(
-                            traceorder="normal",  # keeps order same as sorted_grades
-                            orientation="h",
-                            yanchor="bottom",
-                            y=-0.35,
-                            xanchor="center",
-                            x=0.5
+                            traceorder="normal",  # keeps order as per sorted_grades
+                            orientation="v",
+                            yanchor="middle",
+                            y=0.5,
+                            xanchor="left",
+                            x=1.02,  # place legend just outside right edge
+                            bgcolor="rgba(255,255,255,0)",
+                            bordercolor="lightgray",
+                            borderwidth=0
                         ),
                         xaxis=dict(showline=True, showticklabels=True),
                         yaxis=dict(showline=True),
-                        margin=dict(l=60, r=40, t=60, b=80),
+                        margin=dict(l=60, r=160, t=60, b=60),  # extra right margin for legend
                         plot_bgcolor="white",
                         paper_bgcolor="white",
                         font=dict(size=12),
