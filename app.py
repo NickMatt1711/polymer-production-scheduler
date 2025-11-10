@@ -15,6 +15,7 @@ from openpyxl.styles import Font, Border, Side
 import tempfile
 import os
 import plotly.express as px
+import plotly.graph_objects as go
 
 def create_sample_workbook():
     """Create a sample Excel workbook with the required format"""
@@ -1032,6 +1033,10 @@ if uploaded_file:
                 # Create visualization
                 st.subheader("Production Visualization")
 
+                # ✅ Define a consistent color map for all grades
+                base_colors = px.colors.qualitative.Vivid
+                grade_color_map = {grade: base_colors[i % len(base_colors)] for i, grade in enumerate(grades)}
+                
                 for line in lines:
                     st.markdown(f"### Production Schedule - {line}")
                 
@@ -1053,23 +1058,23 @@ if uploaded_file:
                 
                     gantt_df = pd.DataFrame(gantt_data)
                 
-                    # Create Gantt chart for this line
+                    # ✅ Use the shared color map
                     fig = px.timeline(
                         gantt_df,
                         x_start="Start",
                         x_end="Finish",
                         y="Grade",
                         color="Grade",
-                        color_discrete_sequence=px.colors.qualitative.Vivid,
-                        title=f"Production Schedule - {line}",
+                        color_discrete_map=grade_color_map,
+                        title=f"Production Schedule - {line}"
                     )
                 
-                    # Format axes and gridlines
+                    # ✅ Format y-axis (grades) and x-axis (dates)
                     fig.update_yaxes(
-                        autorange="reversed", 
-                        title=None, 
-                        showgrid=True, 
-                        gridcolor="lightgray", 
+                        autorange="reversed",
+                        title=None,
+                        showgrid=True,
+                        gridcolor="lightgray",
                         gridwidth=1
                     )
                 
@@ -1078,11 +1083,12 @@ if uploaded_file:
                         showgrid=True,
                         gridcolor="lightgray",
                         gridwidth=1,
-                        tickvals=dates,  # show all dates on x-axis
-                        tickformat="%d-%b",  # concise date format (e.g., 01-Nov)
-                        dtick="D1"  # 1-day tick spacing
+                        tickvals=dates,
+                        tickformat="%d-%b",
+                        dtick="D1"
                     )
                 
+                    # ✅ Layout and styling
                     fig.update_layout(
                         height=350,
                         bargap=0.2,
@@ -1093,7 +1099,7 @@ if uploaded_file:
                         margin=dict(l=60, r=40, t=60, b=40),
                         plot_bgcolor="white",
                         paper_bgcolor="white",
-                        font=dict(size=12)
+                        font=dict(size=12),
                     )
                 
                     st.plotly_chart(fig, use_container_width=True)
