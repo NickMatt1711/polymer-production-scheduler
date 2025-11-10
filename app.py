@@ -47,7 +47,7 @@ def create_sample_workbook():
         inventory_df = pd.DataFrame(inventory_data)
         inventory_df.to_excel(writer, sheet_name='Inventory', index=False)
         
-        # Demand sheet - generate dates for current month
+        # Demand sheet - generate dates for current month in dd-mmm-yy format
         import calendar
         from datetime import datetime
         
@@ -59,15 +59,18 @@ def create_sample_workbook():
         # Get number of days in current month
         num_days_in_month = calendar.monthrange(current_year, current_month)[1]
         
-        # Create date range for current month (1st to last day)
+        # Create date range for current month (1st to last day) and format as dd-mmm-yy
         dates = pd.date_range(
             start=f'{current_year}-{current_month:02d}-01',
             periods=num_days_in_month,
             freq='D'
         )
         
+        # Format dates as dd-mmm-yy (e.g., 01-Feb-26)
+        formatted_dates = [date.strftime('%d-%b-%y') for date in dates]
+        
         demand_data = {
-            'Date': dates,  # Keep as datetime objects
+            'Date': formatted_dates,  # Use formatted dates
             'BOPP': [600] * num_days_in_month,
             'Moulding': [500] * num_days_in_month,
             'Raffia': [850] * num_days_in_month,
