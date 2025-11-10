@@ -1029,142 +1029,48 @@ if uploaded_file:
                     st.dataframe(styled_schedule, use_container_width=True)
 
                 # Create visualization
-                # Create production visualization
                 st.subheader("Production Visualization")
                 
-                # Create Gantt charts for each line
+                # Create production charts for each line
                 for line in lines:
-                    st.subheader(f"Production Gantt Chart - {line}")
+                    st.subheader(f"Production Chart - {line}")
                     
-                    # Create data for Gantt chart
-                    gantt_data = []
-                    current_grade = None
-                    start_day = None
-                    
-                    # Group consecutive days with the same grade
+                    # Create dataframe for this line's production
+                    line_data = []
                     for d in range(num_days):
-                        date = formatted_dates[d]
-                        grade_found = None
-                        
-                        # Find which grade is being produced on this line and day
+                        date = formatted_dates[d]  # Use formatted date
                         for grade in grades:
                             if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
-                                grade_found = grade
-                                break
-                        
-                        # Handle grade transitions
-                        if grade_found != current_grade:
-                            # Save the previous production run
-                            if current_grade is not None and start_day is not None:
-                                gantt_data.append({
-                                    'Grade': current_grade,
-                                    'Start': start_day,
-                                    'End': d - 1,
-                                    'Start_Date': formatted_dates[start_day],
-                                    'End_Date': formatted_dates[d - 1],
-                                    'Duration': d - start_day
+                                line_data.append({
+                                    'Date': date,
+                                    'Day': d + 1,  # Add day number starting from 1
+                                    'Grade': grade,
+                                    'Production': solver.Value(production[(grade, line, d)])
                                 })
-                            
-                            # Start new production run
-                            current_grade = grade_found
-                            start_day = d if grade_found is not None else None
                     
-                    # Don't forget the last production run
-                    if current_grade is not None and start_day is not None:
-                        gantt_data.append({
-                            'Grade': current_grade,
-                            'Start': start_day,
-                            'End': num_days - 1,
-                            'Start_Date': formatted_dates[start_day],
-                            'End_Date': formatted_dates[num_days - 1],
-                            'Duration': num_days - start_day
-                        })
-                    
-                    if gantt_data:
-                        # Create Gantt chart
-                        fig, ax = plt.subplots(figsize=(14, 6))
+                    if line_data:
+                        line_df = pd.DataFrame(line_data)
+                        # Use Day instead of Date for the pivot
+                        pivot_df = line_df.pivot_table(index='Day', columns='Grade', values='Production', aggfunc='sum').fillna(0)
                         
-                        # Create color map for grades
-                        cmap = colormaps.get_cmap('tab20')
-                        grade_colors = {}
-                        for idx, grade in enumerate(grades):
-                            grade_colors[grade] = cmap(idx % 20)
+                        fig, ax = plt.subplots(figsize=(12, 6))
+                        bottom = np.zeros(len(pivot_df))
                         
-                        # Plot each production run as a horizontal bar
-                        for i, run in enumerate(gantt_data):
-                            grade = run['Grade']
-                            start = run['Start']
-                            duration = run['Duration']
-                            
-                            ax.barh(
-                                y=grade,
-                                width=duration,
-                                left=start,
-                                color=grade_colors[grade],
-                                edgecolor='black',
-                                alpha=0.8,
-                                label=grade if i == 0 else ""  # Avoid duplicate labels
-                            )
-                            
-                            # Add duration text in the middle of the bar
-                            mid_point = start + duration / 2
-                            ax.text(
-                                mid_point, grades.index(grade),
-                                f'{duration}d',
-                                ha='center', va='center',
-                                fontweight='bold',
-                                fontsize=9,
-                                color='white'
-                            )
+                        for grade in pivot_df.columns:
+                            ax.bar(pivot_df.index, pivot_df[grade], bottom=bottom, label=grade, color=grade_colors[grade])
+                            bottom += pivot_df[grade].values
                         
-                        # Customize the chart
-                        ax.set_xlabel('Day Number')
-                        ax.set_ylabel('Grade')
-                        ax.set_title(f'Production Gantt Chart - {line}')
+                        ax.set_title(f'Production Schedule - {line}')
+                        ax.set_xlabel('Day')
+                        ax.set_ylabel('Production Volume (MT)')
+                        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
                         
-                        # Set y-axis to show all grades
-                        ax.set_yticks(range(len(grades)))
-                        ax.set_yticklabels(grades)
-                        
-                        # Set x-axis to show all days
-                        ax.set_xticks(range(num_days))
-                        ax.set_xticklabels([f'Day {i+1}\n({formatted_dates[i]})' for i in range(num_days)], 
-                                          rotation=45, ha='right')
-                        
-                        # Add grid for better readability
-                        ax.grid(True, axis='x', alpha=0.3)
-                        ax.set_axisbelow(True)
-                        
-                        # Remove duplicate legend entries
-                        handles, labels = ax.get_legend_handles_labels()
-                        by_label = dict(zip(labels, handles))
-                        ax.legend(by_label.values(), by_label.keys(), 
-                                 bbox_to_anchor=(1.05, 1), loc='upper left',
-                                 title='Grades')
+                        # Set x-axis to show all day numbers
+                        ax.set_xticks(range(1, num_days + 1))
+                        ax.set_xticklabels(range(1, num_days + 1))
                         
                         plt.tight_layout()
                         st.pyplot(fig)
-                        
-                        # Display Gantt data as table
-                        st.subheader(f"Production Schedule Details - {line}")
-                        gantt_df = pd.DataFrame(gantt_data)
-                        display_cols = ['Grade', 'Start_Date', 'End_Date', 'Duration']
-                        gantt_display_df = gantt_df[display_cols].copy()
-                        gantt_display_df.columns = ['Grade', 'Start Date', 'End Date', 'Duration (Days)']
-                        
-                        # Apply color coding to the table
-                        def color_grade_row(row):
-                            grade = row['Grade']
-                            if grade in grade_colors:
-                                color = mcolors.to_hex(grade_colors[grade])
-                                return [f'background-color: {color}; color: white; font-weight: bold;'] * len(row)
-                            return [''] * len(row)
-                        
-                        styled_gantt = gantt_display_df.style.apply(color_grade_row, axis=1)
-                        st.dataframe(styled_gantt, use_container_width=True)
-                        
-                    else:
-                        st.info(f"No production scheduled for {line} in the planning period.")
 
                 # Create inventory charts with data labels
                 st.subheader("Inventory Levels")
