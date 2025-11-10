@@ -101,57 +101,53 @@ def create_sample_workbook():
         plant2_transition_df = pd.DataFrame(Plant2_transition)
         plant2_transition_df.to_excel(writer, sheet_name='Transition_Plant2', index=False)
         
-        # Autofit columns and apply date formatting for all sheets
+        # Get workbook for formatting
         workbook = writer.book
         
-        # Function to autofit columns
-        def autofit_columns(ws):
-            for column in ws.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        if cell.value:
-                            max_length = max(max_length, len(str(cell.value)))
-                    except:
-                        pass
-                adjusted_width = (max_length + 2) * 1.2
-                ws.column_dimensions[column_letter].width = min(adjusted_width, 50)  # Cap at 50
-        
-        # Apply autofit to all sheets and date formatting to Demand sheet
+        # Apply date formatting FIRST
         for sheet_name in writer.sheets:
             ws = writer.sheets[sheet_name]
-            autofit_columns(ws)
             
             # Apply date formatting to the Date column in Demand sheet
             if sheet_name == 'Demand':
-                # Find the Date column (assuming it's the first column)
+                # Format the Date column (column A)
                 for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):
                     for cell in row:
                         cell.number_format = 'DD-MMM-YY'  # Excel date format
         
-        # Also format the Force Start Date column in Inventory sheet if it contains dates
-        inventory_ws = writer.sheets['Inventory']
-        # Find the Force Start Date column (you might need to adjust the column index)
-        # Let's find it by header name
-        force_start_col = None
-        for col in range(1, inventory_ws.max_column + 1):
-            if inventory_ws.cell(row=1, column=col).value == 'Force Start Date':
-                force_start_col = col
-                break
+        # Function to autofit columns - UPDATED to handle formatted dates
+        def autofit_columns(ws):
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                
+                # Special handling for date columns in Demand sheet
+                if ws.title == 'Demand' and column_letter == 'A':
+                    # For date column, use the formatted length (DD-MMM-YY = 9 characters)
+                    max_length = 9
+                else:
+                    # For other columns, calculate max length as before
+                    for cell in column:
+                        try:
+                            if cell.value:
+                                # If it's a date cell with formatting, use the formatted length
+                                if hasattr(cell, 'number_format') and cell.number_format:
+                                    if 'MMM' in cell.number_format or 'mmm' in cell.number_format:
+                                        max_length = max(max_length, 9)  # DD-MMM-YY format
+                                    else:
+                                        max_length = max(max_length, len(str(cell.value)))
+                                else:
+                                    max_length = max(max_length, len(str(cell.value)))
+                        except:
+                            pass
+                
+                adjusted_width = (max_length + 2) * 1.2
+                ws.column_dimensions[column_letter].width = min(adjusted_width, 50)  # Cap at 50
         
-        if force_start_col:
-            for row in range(2, inventory_ws.max_row + 1):
-                cell = inventory_ws.cell(row=row, column=force_start_col)
-                if cell.value and str(cell.value).strip():  # If cell has a value
-                    try:
-                        # Convert to datetime and apply format
-                        date_val = pd.to_datetime(cell.value)
-                        cell.value = date_val
-                        cell.number_format = 'DD-MMM-YY'
-                    except:
-                        # If it's not a valid date, leave as is
-                        pass
+        # Apply autofit to all sheets AFTER formatting
+        for sheet_name in writer.sheets:
+            ws = writer.sheets[sheet_name]
+            autofit_columns(ws)
     
     output.seek(0)
     return output
