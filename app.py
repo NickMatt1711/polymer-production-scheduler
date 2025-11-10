@@ -47,7 +47,7 @@ def create_sample_workbook():
         inventory_df = pd.DataFrame(inventory_data)
         inventory_df.to_excel(writer, sheet_name='Inventory', index=False)
         
-        # Demand sheet - generate dates for current month in dd-mmm-yy format
+        # Demand sheet - generate dates for current month as proper Excel dates
         import calendar
         from datetime import datetime
         
@@ -59,18 +59,15 @@ def create_sample_workbook():
         # Get number of days in current month
         num_days_in_month = calendar.monthrange(current_year, current_month)[1]
         
-        # Create date range for current month (1st to last day) and format as dd-mmm-yy
+        # Create date range for current month (1st to last day)
         dates = pd.date_range(
             start=f'{current_year}-{current_month:02d}-01',
             periods=num_days_in_month,
             freq='D'
         )
         
-        # Format dates as dd-mmm-yy (e.g., 01-Feb-26)
-        formatted_dates = [date.strftime('%d-%b-%y') for date in dates]
-        
         demand_data = {
-            'Date': formatted_dates,  # Use formatted dates
+            'Date': dates,  # Keep as datetime objects for Excel
             'BOPP': [600] * num_days_in_month,
             'Moulding': [500] * num_days_in_month,
             'Raffia': [850] * num_days_in_month,
@@ -104,7 +101,7 @@ def create_sample_workbook():
         plant2_transition_df = pd.DataFrame(Plant2_transition)
         plant2_transition_df.to_excel(writer, sheet_name='Transition_Plant2', index=False)
         
-        # Autofit columns for all sheets
+        # Autofit columns and apply date formatting for all sheets
         workbook = writer.book
         
         # Function to autofit columns
@@ -121,10 +118,40 @@ def create_sample_workbook():
                 adjusted_width = (max_length + 2) * 1.2
                 ws.column_dimensions[column_letter].width = min(adjusted_width, 50)  # Cap at 50
         
-        # Apply autofit to all sheets
+        # Apply autofit to all sheets and date formatting to Demand sheet
         for sheet_name in writer.sheets:
             ws = writer.sheets[sheet_name]
             autofit_columns(ws)
+            
+            # Apply date formatting to the Date column in Demand sheet
+            if sheet_name == 'Demand':
+                # Find the Date column (assuming it's the first column)
+                for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):
+                    for cell in row:
+                        cell.number_format = 'DD-MMM-YY'  # Excel date format
+        
+        # Also format the Force Start Date column in Inventory sheet if it contains dates
+        inventory_ws = writer.sheets['Inventory']
+        # Find the Force Start Date column (you might need to adjust the column index)
+        # Let's find it by header name
+        force_start_col = None
+        for col in range(1, inventory_ws.max_column + 1):
+            if inventory_ws.cell(row=1, column=col).value == 'Force Start Date':
+                force_start_col = col
+                break
+        
+        if force_start_col:
+            for row in range(2, inventory_ws.max_row + 1):
+                cell = inventory_ws.cell(row=row, column=force_start_col)
+                if cell.value and str(cell.value).strip():  # If cell has a value
+                    try:
+                        # Convert to datetime and apply format
+                        date_val = pd.to_datetime(cell.value)
+                        cell.value = date_val
+                        cell.number_format = 'DD-MMM-YY'
+                    except:
+                        # If it's not a valid date, leave as is
+                        pass
     
     output.seek(0)
     return output
