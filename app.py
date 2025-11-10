@@ -14,6 +14,9 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Font, Border, Side
 import tempfile
 import os
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 def create_sample_workbook():
     """Create a sample Excel workbook with the required format"""
@@ -1019,11 +1022,11 @@ if uploaded_file:
                     styled_schedule = schedule_df.style.applymap(color_grade, subset=['Grade'])
                     st.dataframe(styled_schedule, use_container_width=True)
 
-                # Create production Gantt charts
-                st.subheader("Production Gantt Charts")
+                # Create production Gantt charts using Plotly
+                st.subheader("📊 Production Gantt Charts")
                 
                 for line in lines:
-                    st.subheader(f"Production Gantt Chart - {line}")
+                    st.subheader(f"Production Schedule - {line}")
                     
                     # Create data for Gantt chart
                     gantt_data = []
@@ -1031,7 +1034,7 @@ if uploaded_file:
                     start_day = None
                     
                     for d in range(num_days):
-                        date = formatted_dates[d]
+                        date = dates[d]
                         producing_grade = None
                         
                         # Find which grade is being produced on this day
@@ -1048,6 +1051,8 @@ if uploaded_file:
                                     'Grade': current_grade,
                                     'Start': start_day,
                                     'End': d - 1,
+                                    'Start_Date': dates[start_day],
+                                    'End_Date': dates[d - 1],
                                     'Duration': d - start_day,
                                     'Line': line
                                 })
@@ -1061,81 +1066,73 @@ if uploaded_file:
                                 'Grade': current_grade,
                                 'Start': start_day,
                                 'End': d,
+                                'Start_Date': dates[start_day],
+                                'End_Date': dates[d],
                                 'Duration': d - start_day + 1,
                                 'Line': line
                             })
                     
-                    # Create Gantt chart
+                    # Create Plotly Gantt chart
                     if gantt_data:
                         gantt_df = pd.DataFrame(gantt_data)
                         
-                        fig, ax = plt.subplots(figsize=(12, 6))
+                        # Create the Gantt chart
+                        fig = px.timeline(
+                            gantt_df, 
+                            x_start="Start_Date", 
+                            x_end="End_Date", 
+                            y="Grade",
+                            color="Grade",
+                            color_discrete_map=grade_colors,
+                            title=f"Production Schedule - {line}",
+                            hover_data={"Duration": True, "Start": True, "End": True}
+                        )
                         
-                        # Create horizontal bars for each production run
-                        for idx, task in enumerate(gantt_data):
-                            color = grade_colors[task['Grade']]
-                            ax.barh(
-                                y=task['Grade'],
-                                width=task['Duration'],
-                                left=task['Start'],
-                                color=color,
-                                edgecolor='black',
-                                alpha=0.8,
-                                height=0.6
-                            )
-                            
-                            # Add duration label in the middle of the bar
-                            mid_point = task['Start'] + task['Duration'] / 2
-                            ax.text(
-                                mid_point, task['Grade'], 
-                                f"{task['Duration']}d",
-                                ha='center', va='center',
-                                fontweight='bold',
-                                fontsize=9,
-                                color='white' if mcolors.rgb_to_hsv(mcolors.to_rgb(color))[2] < 0.6 else 'black'
-                            )
+                        # Customize the appearance
+                        fig.update_layout(
+                            height=400,
+                            showlegend=False,
+                            xaxis_title="Date",
+                            yaxis_title="Grade",
+                            plot_bgcolor='white',
+                            font=dict(size=12)
+                        )
                         
-                        # Customize the chart
-                        ax.set_xlabel('Day Number')
-                        ax.set_ylabel('Grade')
-                        ax.set_title(f'Production Gantt Chart - {line}')
-                        ax.grid(True, alpha=0.3, axis='x')
+                        # Improve grid and layout
+                        fig.update_xaxes(
+                            gridcolor='lightgray',
+                            showgrid=True
+                        )
                         
-                        # Set x-axis to show all days
-                        ax.set_xlim(0, num_days)
-                        ax.set_xticks(range(0, num_days + 1, max(1, num_days // 10)))
+                        fig.update_yaxes(
+                            categoryorder="category ascending",
+                            gridcolor='lightgray', 
+                            showgrid=True
+                        )
                         
-                        # Improve y-axis appearance
-                        ax.set_yticks(range(len(grades)))
-                        ax.set_yticklabels(grades)
+                        # Make bars thicker for better visibility
+                        fig.update_traces(marker=dict(line=dict(width=2, color='DarkSlateGrey')))
                         
-                        # Add day markers for better readability
-                        for day in range(0, num_days + 1, 5):  # Every 5 days
-                            ax.axvline(x=day, color='gray', linestyle=':', alpha=0.5)
+                        st.plotly_chart(fig, use_container_width=True)
                         
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                        
-                        # Display Gantt data as table
-                        with st.expander(f"View Detailed Schedule for {line}"):
-                            display_gantt_df = gantt_df[['Grade', 'Start', 'End', 'Duration']].copy()
-                            display_gantt_df['Start Day'] = display_gantt_df['Start'] + 1  # Convert to 1-based indexing
-                            display_gantt_df['End Day'] = display_gantt_df['End'] + 1
-                            display_gantt_df = display_gantt_df[['Grade', 'Start Day', 'End Day', 'Duration']]
-                            st.dataframe(display_gantt_df, use_container_width=True)
+                        # Display detailed table
+                        with st.expander(f"📋 View Detailed Schedule for {line}"):
+                            display_df = gantt_df[['Grade', 'Start', 'End', 'Duration']].copy()
+                            display_df['Start Day'] = display_df['Start'] + 1
+                            display_df['End Day'] = display_df['End'] + 1
+                            display_df['Start Date'] = display_df['Start_Date'].dt.strftime('%d-%b-%y')
+                            display_df['End Date'] = display_df['End_Date'].dt.strftime('%d-%b-%y')
+                            display_df = display_df[['Grade', 'Start Day', 'End Day', 'Start Date', 'End Date', 'Duration']]
+                            st.dataframe(display_df, use_container_width=True)
                     else:
                         st.info(f"No production scheduled for {line} in the planning period.")
                 
-                # Additional: Combined Gantt chart for all lines
-                st.subheader("Combined Production Gantt Chart - All Lines")
+                # Combined view for all lines
+                st.subheader("🏭 Combined Production Schedule - All Lines")
                 
-                fig, axes = plt.subplots(len(lines), 1, figsize=(14, 4 * len(lines)))
-                if len(lines) == 1:
-                    axes = [axes]
-                
-                for ax_idx, line in enumerate(lines):
-                    # Create Gantt data for this line (same logic as above)
-                    gantt_data = []
+                # Create combined Gantt data
+                combined_gantt_data = []
+                for line in lines:
                     current_grade = None
                     start_day = None
                     
@@ -1148,61 +1145,79 @@ if uploaded_file:
                         
                         if producing_grade != current_grade:
                             if current_grade is not None and start_day is not None:
-                                gantt_data.append({
+                                combined_gantt_data.append({
+                                    'Task': line,
                                     'Grade': current_grade,
-                                    'Start': start_day,
-                                    'End': d - 1,
+                                    'Start': dates[start_day],
+                                    'Finish': dates[d - 1],
                                     'Duration': d - start_day
                                 })
                             current_grade = producing_grade
                             start_day = d if producing_grade is not None else None
                         elif d == num_days - 1 and current_grade is not None and start_day is not None:
-                            gantt_data.append({
+                            combined_gantt_data.append({
+                                'Task': line,
                                 'Grade': current_grade,
-                                'Start': start_day,
-                                'End': d,
+                                'Start': dates[start_day],
+                                'Finish': dates[d],
                                 'Duration': d - start_day + 1
                             })
-                    
-                    # Plot for this line
-                    for task in gantt_data:
-                        color = grade_colors[task['Grade']]
-                        ax = axes[ax_idx]
-                        ax.barh(
-                            y=0,  # Single line per subplot
-                            width=task['Duration'],
-                            left=task['Start'],
-                            color=color,
-                            edgecolor='black',
-                            alpha=0.8,
-                            height=0.6,
-                            label=task['Grade'] if task['Grade'] not in [t.get_label() for t in ax.collections] else ""
-                        )
-                        
-                        # Add grade label on the bar
-                        mid_point = task['Start'] + task['Duration'] / 2
-                        ax.text(
-                            mid_point, 0, 
-                            task['Grade'],
-                            ha='center', va='center',
-                            fontweight='bold',
-                            fontsize=10,
-                            color='white' if mcolors.rgb_to_hsv(mcolors.to_rgb(color))[2] < 0.6 else 'black'
-                        )
-                    
-                    ax.set_title(f'Line: {line}')
-                    ax.set_xlabel('Day Number')
-                    ax.set_yticks([0])
-                    ax.set_yticklabels([line])
-                    ax.set_xlim(0, num_days)
-                    ax.grid(True, alpha=0.3, axis='x')
-                    
-                    # Add day markers
-                    for day in range(0, num_days + 1, 5):
-                        ax.axvline(x=day, color='gray', linestyle=':', alpha=0.5)
                 
-                plt.tight_layout()
-                st.pyplot(fig)
+                if combined_gantt_data:
+                    combined_df = pd.DataFrame(combined_gantt_data)
+                    
+                    # Create combined Gantt chart
+                    fig = px.timeline(
+                        combined_df,
+                        x_start="Start",
+                        x_end="Finish", 
+                        y="Task",
+                        color="Grade",
+                        color_discrete_map=grade_colors,
+                        title="Overall Production Schedule - All Lines",
+                        hover_data={"Duration": True, "Grade": True}
+                    )
+                    
+                    fig.update_layout(
+                        height=300,
+                        xaxis_title="Date",
+                        yaxis_title="Production Line",
+                        plot_bgcolor='white',
+                        showlegend=True,
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1
+                        )
+                    )
+                    
+                    fig.update_traces(marker=dict(line=dict(width=2, color='DarkSlateGrey')))
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Summary statistics
+                    st.subheader("📈 Production Summary")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    total_runs = len(combined_gantt_data)
+                    avg_duration = combined_df['Duration'].mean()
+                    unique_grades = combined_df['Grade'].nunique()
+                    total_days = combined_df['Duration'].sum()
+                    
+                    with col1:
+                        st.metric("Total Production Runs", total_runs)
+                    with col2:
+                        st.metric("Avg Run Duration", f"{avg_duration:.1f} days")
+                    with col3:
+                        st.metric("Grades Produced", unique_grades)
+                    with col4:
+                        st.metric("Total Production Days", total_days)
+                        
+                else:
+                    st.info("No production scheduled in the planning period.")
 
                 # Create inventory charts with data labels
                 st.subheader("Inventory Levels")
