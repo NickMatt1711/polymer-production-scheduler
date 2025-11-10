@@ -27,7 +27,8 @@ def create_sample_workbook():
             'Material Running': ['Moulding', 'BOPP'],
             'Expected Run Days': [1, 3]
         }
-        pd.DataFrame(plant_data).to_excel(writer, sheet_name='Plant', index=False)
+        plant_df = pd.DataFrame(plant_data)
+        plant_df.to_excel(writer, sheet_name='Plant', index=False)
         
         # Inventory sheet
         inventory_data = {
@@ -43,21 +44,40 @@ def create_sample_workbook():
             'Lines': ['Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant2'],
             'Rerun Allowed': ['Yes', 'Yes', 'Yes', 'No', 'No']
         }
-        pd.DataFrame(inventory_data).to_excel(writer, sheet_name='Inventory', index=False)
+        inventory_df = pd.DataFrame(inventory_data)
+        inventory_df.to_excel(writer, sheet_name='Inventory', index=False)
         
-        # Demand sheet - ensure dates are properly formatted as datetime
-        dates = pd.date_range('2025-11-01', periods=30, freq='D')
+        # Demand sheet - generate dates for current month
+        import calendar
+        from datetime import datetime
+        
+        # Get current year and month
+        now = datetime.now()
+        current_year = now.year
+        current_month = now.month
+        
+        # Get number of days in current month
+        num_days_in_month = calendar.monthrange(current_year, current_month)[1]
+        
+        # Create date range for current month (1st to last day)
+        dates = pd.date_range(
+            start=f'{current_year}-{current_month:02d}-01',
+            periods=num_days_in_month,
+            freq='D'
+        )
+        
         demand_data = {
             'Date': dates,  # Keep as datetime objects
-            'BOPP': [600] * 30,
-            'Moulding': [500] * 30,
-            'Raffia': [850] * 30,
-            'TQPP': [400] * 30,
-            'Yarn': [150] * 30
+            'BOPP': [600] * num_days_in_month,
+            'Moulding': [500] * num_days_in_month,
+            'Raffia': [850] * num_days_in_month,
+            'TQPP': [400] * num_days_in_month,
+            'Yarn': [150] * num_days_in_month
         }
-        pd.DataFrame(demand_data).to_excel(writer, sheet_name='Demand', index=False)
+        demand_df = pd.DataFrame(demand_data)
+        demand_df.to_excel(writer, sheet_name='Demand', index=False)
         
-        # Transition matrices (unchanged)
+        # Transition matrices
         # Plant1 transition matrix
         Plant1_transition = {
             'From': ['BOPP', 'Moulding', 'Raffia', 'TQPP'],
@@ -66,7 +86,8 @@ def create_sample_workbook():
             'Raffia': ['Yes', 'Yes', 'Yes', 'Yes'],
             'TQPP': ['No', 'Yes', 'Yes', 'Yes']
         }
-        pd.DataFrame(Plant1_transition).to_excel(writer, sheet_name='Transition_Plant1', index=False)
+        plant1_transition_df = pd.DataFrame(Plant1_transition)
+        plant1_transition_df.to_excel(writer, sheet_name='Transition_Plant1', index=False)
         
         # Plant2 transition matrix
         Plant2_transition = {
@@ -77,7 +98,30 @@ def create_sample_workbook():
             'TQPP': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
             'Yarn': ['No', 'Yes', 'No', 'No', 'Yes']
         }
-        pd.DataFrame(Plant2_transition).to_excel(writer, sheet_name='Transition_Plant2', index=False)
+        plant2_transition_df = pd.DataFrame(Plant2_transition)
+        plant2_transition_df.to_excel(writer, sheet_name='Transition_Plant2', index=False)
+        
+        # Autofit columns for all sheets
+        workbook = writer.book
+        
+        # Function to autofit columns
+        def autofit_columns(ws):
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if cell.value:
+                            max_length = max(max_length, len(str(cell.value)))
+                    except:
+                        pass
+                adjusted_width = (max_length + 2) * 1.2
+                ws.column_dimensions[column_letter].width = min(adjusted_width, 50)  # Cap at 50
+        
+        # Apply autofit to all sheets
+        for sheet_name in writer.sheets:
+            ws = writer.sheets[sheet_name]
+            autofit_columns(ws)
     
     output.seek(0)
     return output
