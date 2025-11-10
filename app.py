@@ -1030,54 +1030,48 @@ if uploaded_file:
                     st.dataframe(styled_schedule, use_container_width=True)
 
                 # Create visualization
-                st.subheader("Production Visualization (Gantt View)")
+                st.subheader("Production Visualization (By Product)")
 
+                gantt_data = []
                 for line in lines:
-                    st.subheader(f"Production Schedule - {line}")
-                
-                    line_data = []
                     for d in range(num_days):
                         date = dates[d]
-                        grade_produced = None
                         for grade in grades:
                             if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
-                                grade_produced = grade
-                                break
-                        if grade_produced:
-                            line_data.append({
-                                "Line": line,
-                                "Grade": grade_produced,
-                                "Start": date,
-                                "Finish": date + timedelta(days=1)  # each bar = 1 day
-                            })
+                                gantt_data.append({
+                                    "Grade": grade,
+                                    "Line": line,
+                                    "Start": date,
+                                    "Finish": date + timedelta(days=1)
+                                })
                 
-                    if line_data:
-                        line_df = pd.DataFrame(line_data)
+                if gantt_data:
+                    gantt_df = pd.DataFrame(gantt_data)
                 
-                        fig = px.timeline(
-                            line_df,
-                            x_start="Start",
-                            x_end="Finish",
-                            y="Line",
-                            color="Grade",
-                            color_discrete_sequence=px.colors.qualitative.Vivid,
-                            title=f"Production Gantt Chart - {line}"
-                        )
+                    fig = px.timeline(
+                        gantt_df,
+                        x_start="Start",
+                        x_end="Finish",
+                        y="Grade",
+                        color="Line",
+                        title="Production Schedule by Grade",
+                        color_discrete_sequence=px.colors.qualitative.Vivid,
+                    )
                 
-                        fig.update_yaxes(categoryorder="total ascending", title=None)
-                        fig.update_xaxes(title="Date")
-                        fig.update_layout(
-                            height=300,
-                            xaxis=dict(showgrid=True),
-                            yaxis=dict(showgrid=False),
-                            bargap=0.2,
-                            showlegend=True,
-                            legend_title_text="Grades"
-                        )
+                    fig.update_yaxes(autorange="reversed", title=None)  # show top-to-bottom order
+                    fig.update_xaxes(title="Date")
+                    fig.update_layout(
+                        height=500,
+                        bargap=0.2,
+                        showlegend=True,
+                        legend_title_text="Production Line",
+                        xaxis=dict(showgrid=True),
+                        yaxis=dict(showgrid=False)
+                    )
                 
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.info(f"No production data available for {line}.")
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No production data available to plot.")
 
                 # Create inventory charts with data labels
                 st.subheader("Inventory Levels")
