@@ -1051,7 +1051,7 @@ if uploaded_file:
                 
                         # Accumulate production for active grade
                         if grade_today:
-                            total_produced += solver.Value(production_vars[(grade_today, line, d)])
+                            total_produced += solver.Value(produced[(grade_today, line, d)])
                 
                     # Close final run if any
                     if current_grade is not None:
