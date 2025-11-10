@@ -1033,9 +1033,9 @@ if uploaded_file:
                 # Create visualization
                 st.subheader("Production Visualization")
 
-                # ✅ Define a consistent color map for all grades
+                sorted_grades = sorted(grades)
                 base_colors = px.colors.qualitative.Vivid
-                grade_color_map = {grade: base_colors[i % len(base_colors)] for i, grade in enumerate(grades)}
+                grade_color_map = {grade: base_colors[i % len(base_colors)] for i, grade in enumerate(sorted_grades)}
                 
                 for line in lines:
                     st.markdown(f"### Production Schedule - {line}")
@@ -1043,7 +1043,7 @@ if uploaded_file:
                     gantt_data = []
                     for d in range(num_days):
                         date = dates[d]
-                        for grade in grades:
+                        for grade in sorted_grades:  # use sorted order
                             if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
                                 gantt_data.append({
                                     "Grade": grade,
@@ -1058,7 +1058,7 @@ if uploaded_file:
                 
                     gantt_df = pd.DataFrame(gantt_data)
                 
-                    # ✅ Use the shared color map
+                    # ✅ Build Gantt chart using consistent color map
                     fig = px.timeline(
                         gantt_df,
                         x_start="Start",
@@ -1066,10 +1066,11 @@ if uploaded_file:
                         y="Grade",
                         color="Grade",
                         color_discrete_map=grade_color_map,
+                        category_orders={"Grade": sorted_grades},  # ensures sorted legend & axis order
                         title=f"Production Schedule - {line}"
                     )
                 
-                    # ✅ Format y-axis (grades) and x-axis (dates)
+                    # ✅ Axes and grid formatting
                     fig.update_yaxes(
                         autorange="reversed",
                         title=None,
@@ -1088,15 +1089,23 @@ if uploaded_file:
                         dtick="D1"
                     )
                 
-                    # ✅ Layout and styling
+                    # ✅ Layout styling
                     fig.update_layout(
                         height=350,
                         bargap=0.2,
                         showlegend=True,
                         legend_title_text="Grade",
+                        legend=dict(
+                            traceorder="normal",  # keeps order same as sorted_grades
+                            orientation="h",
+                            yanchor="bottom",
+                            y=-0.35,
+                            xanchor="center",
+                            x=0.5
+                        ),
                         xaxis=dict(showline=True, showticklabels=True),
                         yaxis=dict(showline=True),
-                        margin=dict(l=60, r=40, t=60, b=40),
+                        margin=dict(l=60, r=40, t=60, b=80),
                         plot_bgcolor="white",
                         paper_bgcolor="white",
                         font=dict(size=12),
