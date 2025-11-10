@@ -1,3 +1,6 @@
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 import pandas as pd
 from ortools.sat.python import cp_model
@@ -14,9 +17,6 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Font, Border, Side
 import tempfile
 import os
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 def create_sample_workbook():
     """Create a sample Excel workbook with the required format"""
