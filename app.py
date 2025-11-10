@@ -389,8 +389,17 @@ if uploaded_file:
             try:
                 excel_file.seek(0)
                 demand_df = pd.read_excel(excel_file, sheet_name='Demand')
+                
+                # Create a copy for display with formatted dates
+                demand_display_df = demand_df.copy()
+                
+                # Format the date column to dd-mmm-yy
+                date_column = demand_display_df.columns[0]
+                if pd.api.types.is_datetime64_any_dtype(demand_display_df[date_column]):
+                    demand_display_df[date_column] = demand_display_df[date_column].dt.strftime('%d-%b-%y')
+                
                 st.subheader("Demand Data")
-                st.dataframe(demand_df, use_container_width=True)
+                st.dataframe(demand_display_df, use_container_width=True)
             except Exception as e:
                 st.error(f"Error reading Demand sheet: {e}")
                 st.stop()
