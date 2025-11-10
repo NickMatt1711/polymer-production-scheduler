@@ -1119,35 +1119,86 @@ if uploaded_file:
                 # Create inventory charts with data labels
                 st.subheader("Inventory Levels")
                 
-                for grade in grades: 
-                    inventory_values = []
-                    for d in range(num_days):
-                        inventory_values.append(solver.Value(inventory_vars[(grade, d)]))
-                    
-                    fig, ax = plt.subplots(figsize=(12, 4))
-                    day_numbers = list(range(1, num_days + 1))
-                    line = ax.plot(day_numbers, inventory_values, marker='o', label=grade, color=grade_colors[grade], linewidth=2, markersize=6)
-                    
-                    # Add data labels
-                    for i, (day, inv) in enumerate(zip(day_numbers, inventory_values)):
-                        ax.annotate(f'{inv:.0f}', 
-                                   (day, inv), 
-                                   textcoords="offset points", 
-                                   xytext=(0,10), 
-                                   ha='center', 
-                                   fontsize=8,
-                                   bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="gray", alpha=0.7))
-                    
-                    ax.axhline(y=min_inventory[grade], color='red', linestyle='--', label='Min Inventory')
-                    ax.axhline(y=max_inventory[grade], color='green', linestyle='--', label='Max Inventory')
-                    ax.set_title(f'Inventory Level - {grade}')
-                    ax.set_xlabel('Day')
-                    ax.set_ylabel('Inventory Volume (MT)')
-                    ax.legend()
-                    ax.grid(True, alpha=0.3)
-                    plt.xticks(day_numbers)  # Show all day numbers
-                    plt.tight_layout()
-                    st.pyplot(fig)
+                last_actual_day = num_days - buffer_days - 1
+
+                for grade in sorted_grades:
+                    inventory_values = [solver.Value(inventory_vars[(grade, d)]) for d in range(num_days)]
+                
+                    # ✅ Key points
+                    start_val = inventory_values[0]
+                    end_val = inventory_values[last_actual_day]
+                    highest_val = max(inventory_values[: last_actual_day + 1])
+                    lowest_val = min(inventory_values[: last_actual_day + 1])
+                
+                    start_x = dates[0]
+                    end_x = dates[last_actual_day]
+                    highest_x = dates[inventory_values.index(highest_val)]
+                    lowest_x = dates[inventory_values.index(lowest_val)]
+                
+                    fig = go.Figure()
+                
+                    # ✅ Inventory line
+                    fig.add_trace(go.Scatter(
+                        x=dates,
+                        y=inventory_values,
+                        mode="lines+markers",
+                        name=grade,
+                        line=dict(color=grade_color_map[grade], width=3),
+                        marker=dict(size=6),
+                        hovertemplate="Date: %{x|%d-%b-%y}<br>Inventory: %{y:.0f} MT<extra></extra>"
+                    ))
+                
+                    # ✅ Min/Max inventory guide lines
+                    fig.add_hline(
+                        y=min_inventory[grade],
+                        line=dict(color="red", width=2, dash="dash"),
+                        annotation_text="Min Inventory",
+                        annotation_position="top left"
+                    )
+                    fig.add_hline(
+                        y=max_inventory[grade],
+                        line=dict(color="green", width=2, dash="dash"),
+                        annotation_text="Max Inventory",
+                        annotation_position="bottom left"
+                    )
+                
+                    # ✅ Inline annotation labels
+                    annotations = [
+                        dict(x=start_x, y=start_val, text=f"Start: {start_val:.0f}", showarrow=True, arrowhead=2, ax=-40, ay=-30,
+                             font=dict(color="black", size=11), bgcolor="white", bordercolor="gray"),
+                        dict(x=end_x, y=end_val, text=f"End: {end_val:.0f}", showarrow=True, arrowhead=2, ax=40, ay=-30,
+                             font=dict(color="black", size=11), bgcolor="white", bordercolor="gray"),
+                        dict(x=highest_x, y=highest_val, text=f"High: {highest_val:.0f}", showarrow=True, arrowhead=2, ax=0, ay=-40,
+                             font=dict(color="darkgreen", size=11), bgcolor="white", bordercolor="gray"),
+                        dict(x=lowest_x, y=lowest_val, text=f"Low: {lowest_val:.0f}", showarrow=True, arrowhead=2, ax=0, ay=40,
+                             font=dict(color="firebrick", size=11), bgcolor="white", bordercolor="gray"),
+                    ]
+                
+                    fig.update_layout(
+                        title=f"Inventory Level - {grade}",
+                        xaxis=dict(
+                            title="Date",
+                            showgrid=True,
+                            gridcolor="lightgray",
+                            tickvals=dates,
+                            tickformat="%d-%b",
+                            dtick="D1"
+                        ),
+                        yaxis=dict(
+                            title="Inventory Volume (MT)",
+                            showgrid=True,
+                            gridcolor="lightgray"
+                        ),
+                        annotations=annotations,
+                        plot_bgcolor="white",
+                        paper_bgcolor="white",
+                        margin=dict(l=60, r=60, t=60, b=60),
+                        font=dict(size=12),
+                        height=400,
+                        showlegend=False
+                    )
+                
+                    st.plotly_chart(fig, use_container_width=True)
 
 
             else:
