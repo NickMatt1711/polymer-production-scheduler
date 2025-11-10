@@ -1010,25 +1010,66 @@ if uploaded_file:
                 # Production schedule with color coding
                 st.subheader("Production Schedule by Line")
                 
-                schedule_data = []
                 for line in lines:
-                    for date, grade in best_solution['is_producing'][line].items():
-                        if grade:
-                            schedule_data.append({'Line': line, 'Date': date, 'Grade': grade})
+                    st.markdown(f"### 🏭 {line}")
                 
-                if schedule_data:
+                    schedule_data = []
+                    current_grade = None
+                    start_day = None
+                
+                    # Iterate day-by-day to detect grade transitions
+                    for d in range(num_days):
+                        date = dates[d]
+                        grade_today = None
+                
+                        for grade in sorted_grades:
+                            if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
+                                grade_today = grade
+                                break
+                
+                        # Detect a new production run or a change in grade
+                        if grade_today != current_grade:
+                            if current_grade is not None:
+                                # End the previous run
+                                end_date = dates[d - 1]
+                                duration = (end_date - start_day).days + 1
+                                schedule_data.append({
+                                    "Grade": current_grade,
+                                    "Start Date": start_day.strftime("%d-%b-%y"),
+                                    "End Date": end_date.strftime("%d-%b-%y"),
+                                    "Days": duration
+                                })
+                            # Start a new run
+                            current_grade = grade_today
+                            start_day = date
+                
+                    # Add the final run if still active
+                    if current_grade is not None:
+                        end_date = dates[-1]
+                        duration = (end_date - start_day).days + 1
+                        schedule_data.append({
+                            "Grade": current_grade,
+                            "Start Date": start_day.strftime("%d-%b-%y"),
+                            "End Date": end_date.strftime("%d-%b-%y"),
+                            "Days": duration
+                        })
+                
+                    if not schedule_data:
+                        st.info(f"No production data available for {line}.")
+                        continue
+                
                     schedule_df = pd.DataFrame(schedule_data)
-                    
-                    # Create a color mapping function
+                
+                    # ✅ Apply grade color styling
                     def color_grade(val):
-                        if val in grade_colors:
-                            color = mcolors.to_hex(grade_colors[val])
-                            return f'background-color: {color}; color: white; font-weight: bold;'
+                        if val in grade_color_map:
+                            color = grade_color_map[val]
+                            return f'background-color: {color}; color: white; font-weight: bold; text-align: center;'
                         return ''
-                    
-                    # Apply styling
-                    styled_schedule = schedule_df.style.applymap(color_grade, subset=['Grade'])
-                    st.dataframe(styled_schedule, use_container_width=True)
+                
+                    # ✅ Render table in Streamlit with color coding
+                    styled_df = schedule_df.style.applymap(color_grade, subset=['Grade'])
+                    st.dataframe(styled_df, use_container_width=True)
 
                 # Create visualization
                 st.subheader("Production Visualization")
