@@ -1148,32 +1148,59 @@ if uploaded_file:
                         hovertemplate="Date: %{x|%d-%b-%y}<br>Inventory: %{y:.0f} MT<extra></extra>"
                     ))
                 
-                    # ✅ Min/Max inventory guide lines
+                    # ✅ Min/Max inventory lines (with numeric labels)
                     fig.add_hline(
                         y=min_inventory[grade],
                         line=dict(color="red", width=2, dash="dash"),
-                        annotation_text="Min Inventory",
-                        annotation_position="top left"
+                        annotation_text=f"Min: {min_inventory[grade]:,.0f}",
+                        annotation_position="top left",
+                        annotation_font_color="red"
                     )
                     fig.add_hline(
                         y=max_inventory[grade],
                         line=dict(color="green", width=2, dash="dash"),
-                        annotation_text="Max Inventory",
-                        annotation_position="bottom left"
+                        annotation_text=f"Max: {max_inventory[grade]:,.0f}",
+                        annotation_position="bottom left",
+                        annotation_font_color="green"
                     )
                 
-                    # ✅ Inline annotation labels
+                    # ✅ Inline annotation labels (Start / End / High / Low)
                     annotations = [
-                        dict(x=start_x, y=start_val, text=f"Start: {start_val:.0f}", showarrow=True, arrowhead=2, ax=-40, ay=-30,
-                             font=dict(color="black", size=11), bgcolor="white", bordercolor="gray"),
-                        dict(x=end_x, y=end_val, text=f"End: {end_val:.0f}", showarrow=True, arrowhead=2, ax=40, ay=-30,
-                             font=dict(color="black", size=11), bgcolor="white", bordercolor="gray"),
-                        dict(x=highest_x, y=highest_val, text=f"High: {highest_val:.0f}", showarrow=True, arrowhead=2, ax=0, ay=-40,
-                             font=dict(color="darkgreen", size=11), bgcolor="white", bordercolor="gray"),
-                        dict(x=lowest_x, y=lowest_val, text=f"Low: {lowest_val:.0f}", showarrow=True, arrowhead=2, ax=0, ay=40,
-                             font=dict(color="firebrick", size=11), bgcolor="white", bordercolor="gray"),
+                        dict(
+                            x=start_x, y=start_val,
+                            text=f"Start: {start_val:.0f}",
+                            showarrow=True, arrowhead=2,
+                            ax=-40, ay=30,
+                            font=dict(color="black", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        ),
+                        dict(
+                            x=end_x, y=end_val,
+                            text=f"End: {end_val:.0f}",
+                            showarrow=True, arrowhead=2,
+                            ax=40, ay=30,
+                            font=dict(color="black", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        ),
+                        dict(
+                            x=highest_x, y=highest_val,
+                            text=f"High: {highest_val:.0f}",
+                            showarrow=True, arrowhead=2,
+                            ax=0, ay=-40,
+                            font=dict(color="darkgreen", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        ),
+                        dict(
+                            x=lowest_x, y=lowest_val,
+                            text=f"Low: {lowest_val:.0f}",
+                            showarrow=True, arrowhead=2,
+                            ax=0, ay=40,
+                            font=dict(color="firebrick", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        )
                     ]
                 
+                    # ✅ Layout configuration
                     fig.update_layout(
                         title=f"Inventory Level - {grade}",
                         xaxis=dict(
@@ -1192,9 +1219,9 @@ if uploaded_file:
                         annotations=annotations,
                         plot_bgcolor="white",
                         paper_bgcolor="white",
-                        margin=dict(l=60, r=60, t=60, b=60),
+                        margin=dict(l=60, r=80, t=60, b=60),
                         font=dict(size=12),
-                        height=400,
+                        height=420,
                         showlegend=False
                     )
                 
