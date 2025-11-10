@@ -1020,7 +1020,6 @@ if uploaded_file:
                     schedule_data = []
                     current_grade = None
                     start_day = None
-                    total_produced = 0
                 
                     # Iterate day-by-day to detect grade transitions
                     for d in range(num_days):
@@ -1032,26 +1031,21 @@ if uploaded_file:
                                 grade_today = grade
                                 break
                 
+                        # Detect a new production run or a change in grade
                         if grade_today != current_grade:
-                            # If the previous run ended, record it
                             if current_grade is not None:
+                                # End the previous run
                                 end_date = dates[d - 1]
                                 duration = (end_date - start_day).days + 1
                                 schedule_data.append({
                                     "Grade": current_grade,
                                     "Start Date": start_day.strftime("%d-%b-%y"),
                                     "End Date": end_date.strftime("%d-%b-%y"),
-                                    "Days": duration,
-                                    "Total Produced (MT)": round(total_produced, 2)
+                                    "Days": duration
                                 })
                             # Start a new run
                             current_grade = grade_today
                             start_day = date
-                            total_produced = 0  # reset for new grade
-                
-                        # accumulate production for the current day
-                        if grade_today:
-                            total_produced += solver.Value(prod_vars[(grade_today, line, d)])
                 
                     # Add the final run if still active
                     if current_grade is not None:
@@ -1061,8 +1055,7 @@ if uploaded_file:
                             "Grade": current_grade,
                             "Start Date": start_day.strftime("%d-%b-%y"),
                             "End Date": end_date.strftime("%d-%b-%y"),
-                            "Days": duration,
-                            "Total Produced (MT)": round(total_produced, 2)
+                            "Days": duration
                         })
                 
                     if not schedule_data:
@@ -1078,13 +1071,8 @@ if uploaded_file:
                             return f'background-color: {color}; color: white; font-weight: bold; text-align: center;'
                         return ''
                 
-                    # ✅ Render styled DataFrame
-                    styled_df = (
-                        schedule_df.style
-                        .applymap(color_grade, subset=['Grade'])
-                        .format({'Total Produced (MT)': '{:,.0f}', 'Days': '{:,.0f}'})
-                    )
-                
+                    # ✅ Render table in Streamlit with color coding
+                    styled_df = schedule_df.style.applymap(color_grade, subset=['Grade'])
                     st.dataframe(styled_df, use_container_width=True)
 
                 # Create visualization
