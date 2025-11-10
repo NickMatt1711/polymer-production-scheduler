@@ -14,6 +14,7 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Font, Border, Side
 import tempfile
 import os
+import plotly.express as px
 
 def create_sample_workbook():
     """Create a sample Excel workbook with the required format"""
@@ -1029,48 +1030,54 @@ if uploaded_file:
                     st.dataframe(styled_schedule, use_container_width=True)
 
                 # Create visualization
-                st.subheader("Production Visualization")
-                
-                # Create production charts for each line
+                st.subheader("Production Visualization (Gantt View)")
+
                 for line in lines:
-                    st.subheader(f"Production Chart - {line}")
-                    
-                    # Create dataframe for this line's production
+                    st.subheader(f"Production Schedule - {line}")
+                
                     line_data = []
                     for d in range(num_days):
-                        date = formatted_dates[d]  # Use formatted date
+                        date = dates[d]
+                        grade_produced = None
                         for grade in grades:
                             if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
-                                line_data.append({
-                                    'Date': date,
-                                    'Day': d + 1,  # Add day number starting from 1
-                                    'Grade': grade,
-                                    'Production': solver.Value(production[(grade, line, d)])
-                                })
-                    
+                                grade_produced = grade
+                                break
+                        if grade_produced:
+                            line_data.append({
+                                "Line": line,
+                                "Grade": grade_produced,
+                                "Start": date,
+                                "Finish": date + timedelta(days=1)  # each bar = 1 day
+                            })
+                
                     if line_data:
                         line_df = pd.DataFrame(line_data)
-                        # Use Day instead of Date for the pivot
-                        pivot_df = line_df.pivot_table(index='Day', columns='Grade', values='Production', aggfunc='sum').fillna(0)
-                        
-                        fig, ax = plt.subplots(figsize=(12, 6))
-                        bottom = np.zeros(len(pivot_df))
-                        
-                        for grade in pivot_df.columns:
-                            ax.bar(pivot_df.index, pivot_df[grade], bottom=bottom, label=grade, color=grade_colors[grade])
-                            bottom += pivot_df[grade].values
-                        
-                        ax.set_title(f'Production Schedule - {line}')
-                        ax.set_xlabel('Day')
-                        ax.set_ylabel('Production Volume (MT)')
-                        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-                        
-                        # Set x-axis to show all day numbers
-                        ax.set_xticks(range(1, num_days + 1))
-                        ax.set_xticklabels(range(1, num_days + 1))
-                        
-                        plt.tight_layout()
-                        st.pyplot(fig)
+                
+                        fig = px.timeline(
+                            line_df,
+                            x_start="Start",
+                            x_end="Finish",
+                            y="Line",
+                            color="Grade",
+                            color_discrete_sequence=px.colors.qualitative.Vivid,
+                            title=f"Production Gantt Chart - {line}"
+                        )
+                
+                        fig.update_yaxes(categoryorder="total ascending", title=None)
+                        fig.update_xaxes(title="Date")
+                        fig.update_layout(
+                            height=300,
+                            xaxis=dict(showgrid=True),
+                            yaxis=dict(showgrid=False),
+                            bargap=0.2,
+                            showlegend=True,
+                            legend_title_text="Grades"
+                        )
+                
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info(f"No production data available for {line}.")
 
                 # Create inventory charts with data labels
                 st.subheader("Inventory Levels")
