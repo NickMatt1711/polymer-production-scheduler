@@ -1,6 +1,3 @@
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
 import pandas as pd
 from ortools.sat.python import cp_model
@@ -17,6 +14,16 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Font, Border, Side
 import tempfile
 import os
+
+# Try to import Plotly, with fallback to matplotlib
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.warning("Plotly is not installed. Using matplotlib for visualizations. For better Gantt charts, install plotly with: pip install plotly")
+
 
 def create_sample_workbook():
     """Create a sample Excel workbook with the required format"""
