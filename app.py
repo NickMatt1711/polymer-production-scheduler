@@ -1032,51 +1032,71 @@ if uploaded_file:
                 # Create visualization
                 st.subheader("Production Visualization")
 
-                gantt_data = []
                 for line in lines:
+                    st.markdown(f"### Production Schedule - {line}")
+                
+                    gantt_data = []
                     for d in range(num_days):
                         date = dates[d]
                         for grade in grades:
                             if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
                                 gantt_data.append({
                                     "Grade": grade,
-                                    "Line": line,
                                     "Start": date,
                                     "Finish": date + timedelta(days=1),
+                                    "Line": line
                                 })
                 
-                if gantt_data:
+                    if not gantt_data:
+                        st.info(f"No production data available for {line}.")
+                        continue
+                
                     gantt_df = pd.DataFrame(gantt_data)
                 
+                    # Create Gantt chart for this line
                     fig = px.timeline(
                         gantt_df,
                         x_start="Start",
                         x_end="Finish",
                         y="Grade",
                         color="Grade",
-                        facet_row="Line",
-                        hover_data=["Line", "Grade", "Start", "Finish"],
                         color_discrete_sequence=px.colors.qualitative.Vivid,
-                        title="Production Schedule by Line and Grade"
+                        title=f"Production Schedule - {line}",
                     )
                 
-                    fig.update_yaxes(autorange="reversed", title=None, matches=None)
-                    fig.update_xaxes(title="Date", showgrid=True)
+                    # Format axes and gridlines
+                    fig.update_yaxes(
+                        autorange="reversed", 
+                        title=None, 
+                        showgrid=True, 
+                        gridcolor="lightgray", 
+                        gridwidth=1
+                    )
+                
+                    fig.update_xaxes(
+                        title="Date",
+                        showgrid=True,
+                        gridcolor="lightgray",
+                        gridwidth=1,
+                        tickvals=dates,  # show all dates on x-axis
+                        tickformat="%d-%b",  # concise date format (e.g., 01-Nov)
+                        dtick="D1"  # 1-day tick spacing
+                    )
+                
                     fig.update_layout(
-                        height=200 * len(lines),  # auto scale height based on number of lines
+                        height=350,
                         bargap=0.2,
                         showlegend=True,
                         legend_title_text="Grade",
-                        xaxis=dict(showgrid=True),
-                        margin=dict(l=40, r=40, t=60, b=40),
+                        xaxis=dict(showline=True, showticklabels=True),
+                        yaxis=dict(showline=True),
+                        margin=dict(l=60, r=40, t=60, b=40),
+                        plot_bgcolor="white",
+                        paper_bgcolor="white",
+                        font=dict(size=12)
                     )
                 
-                    # Ensure facets don't share y-axis, for better readability
-                    fig.for_each_yaxis(lambda yaxis: yaxis.update(showgrid=False, showticklabels=True))
-                
                     st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.info("No production data available to plot.")
 
                 # Create inventory charts with data labels
                 st.subheader("Inventory Levels")
