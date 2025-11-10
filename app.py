@@ -1022,7 +1022,7 @@ if uploaded_file:
                     start_day = None
                     total_produced = 0
                 
-                    # Iterate day-by-day to detect continuous runs
+                    # Iterate day-by-day to detect grade transitions
                     for d in range(num_days):
                         date = dates[d]
                         grade_today = None
@@ -1033,8 +1033,8 @@ if uploaded_file:
                                 break
                 
                         if grade_today != current_grade:
+                            # If the previous run ended, record it
                             if current_grade is not None:
-                                # Close previous run
                                 end_date = dates[d - 1]
                                 duration = (end_date - start_day).days + 1
                                 schedule_data.append({
@@ -1047,13 +1047,13 @@ if uploaded_file:
                             # Start a new run
                             current_grade = grade_today
                             start_day = date
-                            total_produced = 0
+                            total_produced = 0  # reset for new grade
                 
-                        # Accumulate production for active grade
+                        # accumulate production for the current day
                         if grade_today:
-                            total_produced += solver.Value(produced[(grade_today, line, d)])
+                            total_produced += solver.Value(prod_vars[(grade_today, line, d)])
                 
-                    # Close final run if any
+                    # Add the final run if still active
                     if current_grade is not None:
                         end_date = dates[-1]
                         duration = (end_date - start_day).days + 1
@@ -1071,25 +1071,14 @@ if uploaded_file:
                 
                     schedule_df = pd.DataFrame(schedule_data)
                 
-                    # ✅ Append a grand total row
-                    total_row = pd.DataFrame({
-                        "Grade": ["Total"],
-                        "Start Date": [""],
-                        "End Date": [""],
-                        "Days": [schedule_df["Days"].sum()],
-                        "Total Produced (MT)": [schedule_df["Total Produced (MT)"].sum()]
-                    })
-                    schedule_df = pd.concat([schedule_df, total_row], ignore_index=True)
-                
-                    # ✅ Color styling for grades
+                    # ✅ Apply grade color styling
                     def color_grade(val):
-                        if val == "Total":
-                            return "background-color: black; color: white; font-weight: bold; text-align: center;"
                         if val in grade_color_map:
                             color = grade_color_map[val]
-                            return f'background-color: {grade_color_map[val]}; color: white; font-weight: bold; text-align: center;'
+                            return f'background-color: {color}; color: white; font-weight: bold; text-align: center;'
                         return ''
                 
+                    # ✅ Render styled DataFrame
                     styled_df = (
                         schedule_df.style
                         .applymap(color_grade, subset=['Grade'])
