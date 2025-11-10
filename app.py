@@ -14,7 +14,9 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Font, Border, Side
 import tempfile
 import os
-
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 def create_sample_workbook():
     """Create a sample Excel workbook with the required format"""
@@ -1152,39 +1154,40 @@ if uploaded_file:
                         st.dataframe(styled_df, use_container_width=True)
                 else:
                     st.info("No production scheduled for any line")
-            
-                            # Create inventory charts with data labels
-                            st.subheader("Inventory Levels")
-                            
-                            for grade in grades: 
-                                inventory_values = []
-                                for d in range(num_days):
-                                    inventory_values.append(solver.Value(inventory_vars[(grade, d)]))
-                                
-                                fig, ax = plt.subplots(figsize=(12, 4))
-                                day_numbers = list(range(1, num_days + 1))
-                                line = ax.plot(day_numbers, inventory_values, marker='o', label=grade, color=grade_colors[grade], linewidth=2, markersize=6)
-                                
-                                # Add data labels
-                                for i, (day, inv) in enumerate(zip(day_numbers, inventory_values)):
-                                    ax.annotate(f'{inv:.0f}', 
-                                               (day, inv), 
-                                               textcoords="offset points", 
-                                               xytext=(0,10), 
-                                               ha='center', 
-                                               fontsize=8,
-                                               bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="gray", alpha=0.7))
-                                
-                                ax.axhline(y=min_inventory[grade], color='red', linestyle='--', label='Min Inventory')
-                                ax.axhline(y=max_inventory[grade], color='green', linestyle='--', label='Max Inventory')
-                                ax.set_title(f'Inventory Level - {grade}')
-                                ax.set_xlabel('Day')
-                                ax.set_ylabel('Inventory Volume (MT)')
-                                ax.legend()
-                                ax.grid(True, alpha=0.3)
-                                plt.xticks(day_numbers)  # Show all day numbers
-                                plt.tight_layout()
-                                st.pyplot(fig)
+                
+
+                # Create inventory charts with data labels
+                st.subheader("Inventory Levels")
+                
+                for grade in grades: 
+                    inventory_values = []
+                    for d in range(num_days):
+                        inventory_values.append(solver.Value(inventory_vars[(grade, d)]))
+                    
+                    fig, ax = plt.subplots(figsize=(12, 4))
+                    day_numbers = list(range(1, num_days + 1))
+                    line = ax.plot(day_numbers, inventory_values, marker='o', label=grade, color=grade_colors[grade], linewidth=2, markersize=6)
+                    
+                    # Add data labels
+                    for i, (day, inv) in enumerate(zip(day_numbers, inventory_values)):
+                        ax.annotate(f'{inv:.0f}', 
+                                   (day, inv), 
+                                   textcoords="offset points", 
+                                   xytext=(0,10), 
+                                   ha='center', 
+                                   fontsize=8,
+                                   bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="gray", alpha=0.7))
+                    
+                    ax.axhline(y=min_inventory[grade], color='red', linestyle='--', label='Min Inventory')
+                    ax.axhline(y=max_inventory[grade], color='green', linestyle='--', label='Max Inventory')
+                    ax.set_title(f'Inventory Level - {grade}')
+                    ax.set_xlabel('Day')
+                    ax.set_ylabel('Inventory Volume (MT)')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    plt.xticks(day_numbers)  # Show all day numbers
+                    plt.tight_layout()
+                    st.pyplot(fig)
 
 
             else:
