@@ -1268,29 +1268,6 @@ if uploaded_file:
                         hovertemplate="Date: %{x|%d-%b-%y}<br>Inventory: %{y:.0f} MT<extra></extra>"
                     ))
                 
-                    # Add shutdown periods for plants that produce this grade
-                    shutdown_added = False
-                    for line in allowed_lines[grade]:
-                        if line in shutdown_periods and shutdown_periods[line]:
-                            shutdown_days = shutdown_periods[line]
-                            start_shutdown = dates[shutdown_days[0]]
-                            end_shutdown = dates[shutdown_days[-1]]
-                            
-                            # Add vertical shaded regions for shutdown periods
-                            fig.add_vrect(
-                                x0=start_shutdown,
-                                x1=end_shutdown + timedelta(days=1),
-                                fillcolor="red",
-                                opacity=0.1,
-                                layer="below",
-                                line_width=0,
-                                annotation_text=f"Shutdown: {line}" if not shutdown_added else "",
-                                annotation_position="top left",
-                                annotation_font_size=10,
-                                annotation_font_color="red"
-                            )
-                            shutdown_added = True
-                
                     fig.add_hline(
                         y=min_inventory[grade],
                         line=dict(color="red", width=2, dash="dash"),
@@ -1307,22 +1284,6 @@ if uploaded_file:
                     )
                 
                     annotations = [
-                        dict(
-                            x=start_x, y=start_val,
-                            text=f"Start: {start_val:.0f}",
-                            showarrow=True, arrowhead=2,
-                            ax=-40, ay=30,
-                            font=dict(color="black", size=11),
-                            bgcolor="white", bordercolor="gray"
-                        ),
-                        dict(
-                            x=end_x, y=end_val,
-                            text=f"End: {end_val:.0f}",
-                            showarrow=True, arrowhead=2,
-                            ax=40, ay=30,
-                            font=dict(color="black", size=11),
-                            bgcolor="white", bordercolor="gray"
-                        ),
                         dict(
                             x=highest_x, y=highest_val,
                             text=f"High: {highest_val:.0f}",
