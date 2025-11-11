@@ -494,6 +494,19 @@ if uploaded_file:
                 max_run_days = {(r['Grade'], r['Line']): r['Max. Run Days'] for r in inventory_records}
                 force_start_date = {(r['Grade'], r['Line']): r['Force Start Date'] for r in inventory_records}
                 rerun_allowed = {(r['Grade'], r['Line']): r['Rerun Allowed'] for r in inventory_records}
+
+                initial_inventory_grade = {}
+                min_inventory_grade = {}
+                max_inventory_grade = {}
+                min_closing_inventory_grade = {}
+                
+                for grade in grades:
+                    lines_for_grade = allowed_lines.get(grade, [])
+                    initial_inventory_grade[grade] = sum(initial_inventory.get((grade, line), 0) for line in lines_for_grade)
+                    min_inventory_grade[grade] = sum(min_inventory.get((grade, line), 0) for line in lines_for_grade)
+                    max_inventory_grade[grade] = sum(max_inventory.get((grade, line), 1e9) for line in lines_for_grade)
+                    min_closing_inventory_grade[grade] = sum(min_closing_inventory.get((grade, line), 0) for line in lines_for_grade)
+
                 
                 # Get unique grade list as before
                 grades = sorted(list(set([r['Grade'] for r in inventory_records])))
