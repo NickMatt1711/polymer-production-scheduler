@@ -719,20 +719,16 @@ if uploaded_file:
                         model.Add(sum(production_vars) <= capacities[line])
             
             # Force Start Date - WITH SAFETY CHECKS
-            for grade in grades:
-                if force_start_date[grade]:
+            for (grade, line), start_date in force_start_date.items():
+                if start_date:
                     try:
-                        start_day_index = dates.index(force_start_date[grade])
-                        force_production_constraints = []
-                        for line in allowed_lines[grade]:  # Only consider allowed lines
-                            var = get_is_producing_var(grade, line, start_day_index)
-                            if var is not None:
-                                force_production_constraints.append(var)
-                        if force_production_constraints:
-                            model.AddBoolOr(force_production_constraints)
-                        st.info(f"Force start date for grade '{grade}' set to day ({force_start_date[grade]})")
+                        start_day_index = dates.index(start_date)
+                        var = get_is_producing_var(grade, line, start_day_index)
+                        if var is not None:
+                            model.Add(var == 1)
+                        st.info(f"Force start date for {grade} in {line}: {start_date}")
                     except ValueError:
-                        st.warning(f"Force start date '{force_start_date[grade]}' for grade '{grade}' not found in demand dates.")
+                        st.warning(f"Force start date {start_date} for {grade} in {line} not found in demand dates.")
             
             # Minimum & Maximum Run Days - WITH SAFETY CHECKS
             is_start_vars = {}
