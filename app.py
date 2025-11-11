@@ -1,11 +1,3 @@
-# app.py (FULL script)
-# Optimized polymer production scheduler with fixes:
-# - Solver performance improvements (cached sums / less Python work inside loops)
-# - Restored Total Stockout in production table
-# - Inventory charts corrected to plot inventory variable values
-# - Gridlines restored in Plotly visualizations
-# - All displayed dates consistently formatted DD-MMM-YY
-
 import streamlit as st
 import pandas as pd
 from ortools.sat.python import cp_model
