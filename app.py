@@ -452,127 +452,50 @@ if uploaded_file:
             if 'best_solution' not in st.session_state:
                 st.session_state.best_solution = None
             
-            # Data preprocessing
-            status_text.markdown('<div class="info-box">🔄 Preprocessing data...</div>', unsafe_allow_html=True)
-            progress_bar.progress(10)
             
-            try:
-                # Data preprocessing with corrected column names and default values
-                num_lines = len(plant_df)
-                lines = list(plant_df['Plant'])
-                capacities = {row['Plant']: row['Capacity per day'] for index, row in plant_df.iterrows()}
-                grades = list(inventory_df['Grade Name'])
-                
-                # Enhanced inventory processing with default values
-                initial_inventory = {}
-                min_inventory = {}
-                max_inventory = {}
-                min_closing_inventory = {}
-                min_run_days = {}
-                max_run_days = {}
-                force_start_date = {}
-                allowed_lines = {}
-                rerun_allowed = {}
-                
-                for index, row in inventory_df.iterrows():
-                    grade = row['Grade Name']
-                    
-                    # Opening Inventory - default 0
-                    if pd.notna(row['Opening Inventory']):
-                        initial_inventory[grade] = row['Opening Inventory']
-                    else:
-                        initial_inventory[grade] = 0
-                        st.warning(f"⚠️ Opening Inventory for grade '{grade}' is missing, using default value: 0")
-                    
-                    # Min. Inventory - default 0
-                    if pd.notna(row['Min. Inventory']):
-                        min_inventory[grade] = row['Min. Inventory']
-                    else:
-                        min_inventory[grade] = 0
-                        st.warning(f"⚠️ Min. Inventory for grade '{grade}' is missing, using default value: 0")
-                    
-                    # Max. Inventory - default very large number (limitless)
-                    if pd.notna(row['Max. Inventory']):
-                        max_inventory[grade] = row['Max. Inventory']
-                    else:
-                        max_inventory[grade] = 1000000000  # Very large number as "limitless"
-                        st.warning(f"⚠️ Max. Inventory for grade '{grade}' is missing, using default value: 1000000000 (limitless)")
-                    
-                    # Min. Closing Inventory - default 0
-                    if pd.notna(row['Min. Closing Inventory']):
-                        min_closing_inventory[grade] = row['Min. Closing Inventory']
-                    else:
-                        min_closing_inventory[grade] = 0
-                        st.warning(f"⚠️ Min. Closing Inventory for grade '{grade}' is missing, using default value: 0")
-                    
-                    # Min. Run Days - default 1
-                    if pd.notna(row['Min. Run Days']):
-                        min_run_days[grade] = int(row['Min. Run Days'])
-                    else:
-                        min_run_days[grade] = 1
-                        st.warning(f"⚠️ Min. Run Days for grade '{grade}' is missing, using default value: 1")
-                    
-                    # Max. Run Days - default 9999 (very large)
-                    if pd.notna(row['Max. Run Days']):
-                        max_run_days[grade] = int(row['Max. Run Days'])
-                    else:
-                        max_run_days[grade] = 9999
-                        st.warning(f"⚠️ Max. Run Days for grade '{grade}' is missing, using default value: 9999")
-                    
-                    # Force Start Date
-                    if pd.notna(row['Force Start Date']):
-                        try:
-                            force_start_date[grade] = pd.to_datetime(row['Force Start Date']).date()
-                        except:
-                            force_start_date[grade] = None
-                            st.warning(f"⚠️ Force Start Date for grade '{grade}' is invalid, ignoring")
-                    else:
-                        force_start_date[grade] = None
-                    
-                    # Lines - handle None values properly
-                    lines_value = row['Lines']
-                    if pd.notna(lines_value) and lines_value != '':
-                        # Split by comma and strip whitespace
-                        allowed_lines[grade] = [x.strip() for x in str(lines_value).split(',')]
-                    else:
-                        # If no lines specified, allow all lines
-                        allowed_lines[grade] = lines
-                        st.warning(f"⚠️ Lines for grade '{grade}' are not specified, allowing all lines: {lines}")
-                    
-                    # Rerun Allowed - default 'Yes'
-                    rerun_val = row['Rerun Allowed']
-                    if pd.notna(rerun_val) and isinstance(rerun_val, str) and rerun_val.strip().lower() == 'no':
-                        rerun_allowed[grade] = False
-                    else:
-                        rerun_allowed[grade] = True
-                        if pd.isna(rerun_val) or (isinstance(rerun_val, str) and rerun_val.strip().lower() != 'yes'):
-                            st.warning(f"⚠️ Rerun Allowed for grade '{grade}' is missing or invalid, using default value: Yes")
-            
-                # FIXED: Changed from 'Plant' to 'Lines' column and handle None values properly
-                allowed_lines = {}
-                for index, row in inventory_df.iterrows():
-                    grade = row['Grade Name']
-                    lines_value = row['Lines']
-                    if pd.notna(lines_value) and lines_value != '':
-                        # Split by comma and strip whitespace
-                        allowed_lines[grade] = [x.strip() for x in str(lines_value).split(',')]
-                    else:
-                        # If no lines specified, allow all lines
-                        allowed_lines[grade] = lines
-            
-                rerun_allowed = {}
-                for index, row in inventory_df.iterrows():
-                    rerun_val = row['Rerun Allowed']
-                    if isinstance(rerun_val, str) and rerun_val.strip().lower() == 'yes':
-                        rerun_allowed[row['Grade Name']] = True
-                    else:
-                        rerun_allowed[row['Grade Name']] = False
-            
-                max_run_days = {row['Grade Name']: int(row['Max. Run Days']) if pd.notna(row['Max. Run Days']) else 9999 for index, row in inventory_df.iterrows()}
-                min_closing_inventory = {row['Grade Name']: row['Min. Closing Inventory'] if pd.notna(row['Min. Closing Inventory']) else 0 for index, row in inventory_df.iterrows()}
-            
-                # Material running info with error handling
-                material_running_info = {}
+# --- Modified Inventory Preprocessing: Allow duplicate grades per plant ---
+inventory_records = []
+
+for _, row in inventory_df.iterrows():
+    grade = row['Grade Name']
+    lines_list = [x.strip() for x in str(row['Lines']).split(',')] if pd.notna(row['Lines']) else lines
+
+    for line in lines_list:
+        record = {
+            'Grade': grade,
+            'Line': line,
+            'Opening Inventory': row.get('Opening Inventory', 0) or 0,
+            'Min. Inventory': row.get('Min. Inventory', 0) or 0,
+            'Max. Inventory': row.get('Max. Inventory', 1e9) or 1e9,
+            'Min. Closing Inventory': row.get('Min. Closing Inventory', 0) or 0,
+            'Min. Run Days': int(row.get('Min. Run Days', 1) or 1),
+            'Max. Run Days': int(row.get('Max. Run Days', 9999) or 9999),
+            'Force Start Date': pd.to_datetime(row['Force Start Date']).date()
+                                if pd.notna(row['Force Start Date']) else None,
+            'Rerun Allowed': str(row.get('Rerun Allowed', 'Yes')).strip().lower() == 'yes'
+        }
+        inventory_records.append(record)
+
+# Convert into lookup dictionaries indexed by (grade, line)
+initial_inventory = {(r['Grade'], r['Line']): r['Opening Inventory'] for r in inventory_records}
+min_inventory = {(r['Grade'], r['Line']): r['Min. Inventory'] for r in inventory_records}
+max_inventory = {(r['Grade'], r['Line']): r['Max. Inventory'] for r in inventory_records}
+min_closing_inventory = {(r['Grade'], r['Line']): r['Min. Closing Inventory'] for r in inventory_records}
+min_run_days = {(r['Grade'], r['Line']): r['Min. Run Days'] for r in inventory_records}
+max_run_days = {(r['Grade'], r['Line']): r['Max. Run Days'] for r in inventory_records}
+force_start_date = {(r['Grade'], r['Line']): r['Force Start Date'] for r in inventory_records}
+rerun_allowed = {(r['Grade'], r['Line']): r['Rerun Allowed'] for r in inventory_records}
+
+# Get unique grade list as before
+grades = sorted(list(set([r['Grade'] for r in inventory_records])))
+
+# Allowed lines mapping
+allowed_lines = {}
+for grade in grades:
+    allowed_lines[grade] = [r['Line'] for r in inventory_records if r['Grade'] == grade]
+
+
+material_running_info = {}
                 for index, row in plant_df.iterrows():
                     plant = row['Plant']
                     material = row['Material Running']
@@ -785,23 +708,21 @@ if uploaded_file:
                     if production_vars:  # Only add constraint if there are variables
                         model.Add(sum(production_vars) <= capacities[line])
             
-            # Force Start Date - WITH SAFETY CHECKS
-            for grade in grades:
-                if force_start_date[grade]:
-                    try:
-                        start_day_index = dates.index(force_start_date[grade])
-                        force_production_constraints = []
-                        for line in allowed_lines[grade]:  # Only consider allowed lines
-                            var = get_is_producing_var(grade, line, start_day_index)
-                            if var is not None:
-                                force_production_constraints.append(var)
-                        if force_production_constraints:
-                            model.AddBoolOr(force_production_constraints)
-                        st.info(f"Force start date for grade '{grade}' set to day ({force_start_date[grade]})")
-                    except ValueError:
-                        st.warning(f"Force start date '{force_start_date[grade]}' for grade '{grade}' not found in demand dates.")
             
-            # Minimum & Maximum Run Days - WITH SAFETY CHECKS
+# --- Force Start Date (now per grade-line) ---
+for (grade, line), start_date in force_start_date.items():
+    if start_date:
+        try:
+            start_day_index = dates.index(start_date)
+            var = get_is_producing_var(grade, line, start_day_index)
+            if var is not None:
+                model.Add(var == 1)
+            st.info(f"Force start date for {grade} in {line}: {start_date}")
+        except ValueError:
+            st.warning(f"Force start date {start_date} for {grade} in {line} not found in demand dates.")
+
+
+# Minimum & Maximum Run Days - WITH SAFETY CHECKS
             is_start_vars = {}
             for grade in grades:
                 for line in allowed_lines[grade]:  # Only consider allowed lines
