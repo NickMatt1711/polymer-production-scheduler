@@ -34,7 +34,7 @@ def create_sample_workbook():
         plant_df = pd.DataFrame(plant_data)
         plant_df.to_excel(writer, sheet_name='Plant', index=False)
         
-        # Inventory sheet without Increment Days
+        # Inventory sheet
         inventory_data = {
             'Grade Name': ['BOPP', 'Moulding', 'Raffia', 'TQPP', 'Yarn'],
             'Opening Inventory': [500, 16000, 3000, 1700, 2500],
