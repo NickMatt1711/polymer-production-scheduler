@@ -27,7 +27,9 @@ def create_sample_workbook():
             'Plant': ['Plant1', 'Plant2'],
             'Capacity per day': [1500, 1000],
             'Material Running': ['Moulding', 'BOPP'],
-            'Expected Run Days': [1, 3]
+            'Expected Run Days': [1, 3],
+            'Shutdown Start Date': ['', '15-Dec-24'],
+            'Shutdown End Date': ['', '17-Dec-24']
         }
         plant_df = pd.DataFrame(plant_data)
         plant_df.to_excel(writer, sheet_name='Plant', index=False)
