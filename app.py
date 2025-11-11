@@ -955,6 +955,15 @@ if uploaded_file:
                 with col4:
                     st.metric("Planning Horizon", f"{num_days} days")
 
+                # Display shutdown information
+                if shutdown_periods:
+                    st.subheader("🔧 Plant Shutdown Information")
+                    for line, shutdown_days in shutdown_periods.items():
+                        if shutdown_days:
+                            start_date = dates[shutdown_days[0]]
+                            end_date = dates[shutdown_days[-1]]
+                            st.info(f"**{line}**: {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({len(shutdown_days)} days)")
+
                 cmap = colormaps.get_cmap('tab20')
                 grade_colors = {}
                 for idx, grade in enumerate(grades):
@@ -965,13 +974,10 @@ if uploaded_file:
                 production_totals = {}
                 grade_totals = {}
                 plant_totals = {line: 0 for line in lines}
-                stockout_totals = {}
                 
                 for grade in grades:
                     production_totals[grade] = {}
                     grade_totals[grade] = 0
-                    stockout_totals[grade] = 0
-                    
                     for line in lines:
                         total_prod = 0
                         for d in range(num_days):
@@ -981,27 +987,19 @@ if uploaded_file:
                         production_totals[grade][line] = total_prod
                         grade_totals[grade] += total_prod
                         plant_totals[line] += total_prod
-                    
-                    # Calculate total stockout for this grade
-                    for d in range(num_days):
-                        key = (grade, d)
-                        if key in stockout_vars:
-                            stockout_totals[grade] += solver.Value(stockout_vars[key])
                 
                 total_prod_data = []
                 for grade in grades:
                     row = {'Grade': grade}
                     for line in lines:
                         row[line] = production_totals[grade][line]
-                    row['Total Produced'] = grade_totals[grade]
-                    row['Total Stockout'] = stockout_totals[grade]
+                    row['Total'] = grade_totals[grade]
                     total_prod_data.append(row)
                 
                 totals_row = {'Grade': 'Total'}
                 for line in lines:
                     totals_row[line] = plant_totals[line]
-                totals_row['Total Produced'] = sum(plant_totals.values())
-                totals_row['Total Stockout'] = sum(stockout_totals.values())
+                totals_row['Total'] = sum(plant_totals.values())
                 total_prod_data.append(totals_row)
                 
                 total_prod_df = pd.DataFrame(total_prod_data)
@@ -1102,6 +1100,26 @@ if uploaded_file:
                         title=f"Production Schedule - {line}"
                     )
                 
+                    # Add shutdown period visualization
+                    if line in shutdown_periods and shutdown_periods[line]:
+                        shutdown_days = shutdown_periods[line]
+                        start_shutdown = dates[shutdown_days[0]]
+                        end_shutdown = dates[shutdown_days[-1]] + timedelta(days=1)
+                        
+                        # Add shaded rectangle for shutdown period
+                        fig.add_vrect(
+                            x0=start_shutdown,
+                            x1=end_shutdown,
+                            fillcolor="red",
+                            opacity=0.2,
+                            layer="below",
+                            line_width=0,
+                            annotation_text="SHUTDOWN",
+                            annotation_position="top left",
+                            annotation_font_size=14,
+                            annotation_font_color="red"
+                        )
+                
                     fig.update_yaxes(
                         autorange="reversed",
                         title=None,
@@ -1174,6 +1192,29 @@ if uploaded_file:
                         marker=dict(size=6),
                         hovertemplate="Date: %{x|%d-%b-%y}<br>Inventory: %{y:.0f} MT<extra></extra>"
                     ))
+                
+                    # Add shutdown periods for plants that produce this grade
+                    shutdown_added = False
+                    for line in allowed_lines[grade]:
+                        if line in shutdown_periods and shutdown_periods[line]:
+                            shutdown_days = shutdown_periods[line]
+                            start_shutdown = dates[shutdown_days[0]]
+                            end_shutdown = dates[shutdown_days[-1]]
+                            
+                            # Add vertical shaded regions for shutdown periods
+                            fig.add_vrect(
+                                x0=start_shutdown,
+                                x1=end_shutdown + timedelta(days=1),
+                                fillcolor="red",
+                                opacity=0.1,
+                                layer="below",
+                                line_width=0,
+                                annotation_text=f"Shutdown: {line}" if not shutdown_added else "",
+                                annotation_position="top left",
+                                annotation_font_size=10,
+                                annotation_font_color="red"
+                            )
+                            shutdown_added = True
                 
                     fig.add_hline(
                         y=min_inventory[grade],
@@ -1296,6 +1337,7 @@ else:
     <ul>
         <li><strong>Multi-Plant Force Start Dates:</strong> Specify different force start dates for the same grade on different plants</li>
         <li><strong>Plant Shutdowns:</strong> Define maintenance periods where production is halted</li>
+        <li><strong>Shutdown Visualization:</strong> Clear visual indicators for shutdown periods in production schedules</li>
         <li><strong>Relaxed Constraints:</strong> Better handling of infeasible scenarios with helpful error messages</li>
     </ul>
     </div>
@@ -1315,7 +1357,7 @@ else:
         - Contains sample data that you can modify
         - Ready-to-use structure for the optimization
         - Shows how to specify different force start dates for the same grade on different plants
-        - Includes example shutdown periods for Plant2
+        - Includes example shutdown periods for Plant2 with visual indicators
         - Uses realistic constraints that are more likely to be feasible
         """)
     
@@ -1365,7 +1407,7 @@ else:
         Plant  | Capacity | Shutdown Start Date | Shutdown End Date
         Plant1 | 1500     | 15-Nov-25           | 18-Nov-25
         ```
-        During this period, Plant1 will have zero production.
+        During this period, Plant1 will have zero production and will be visually highlighted in the schedule.
         
         **3. Demand Sheet**
         - First column: Dates
@@ -1380,6 +1422,6 @@ else:
 
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: gray;'>Polymer Production Scheduler • Built with Streamlit • Multi-Plant Support • Shutdown Management</div>",
+    "<div style='text-align: center; color: gray;'>Polymer Production Scheduler • Built with Streamlit • Multi-Plant Support • Shutdown Visualization</div>",
     unsafe_allow_html=True
 )
