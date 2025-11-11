@@ -756,12 +756,18 @@ if uploaded_file:
                     grade, plant = grade_plant_key
                     try:
                         start_day_index = dates.index(start_date)
-                        var = get_is_producing_var(grade, plant, start_day_index)
-                        if var is not None:
-                            model.Add(var == 1)
-                            st.info(f"✅ Enforced force start date for grade '{grade}' on plant '{plant}' at day {start_date}")
+                        
+                        # Check if plant is shutdown on force start date
+                        if start_date in plant_shutdown_dates.get(plant, []):
+                            st.error(f"❌ Conflict: Force start date for grade '{grade}' on plant '{plant}' ({start_date}) falls during a shutdown period!")
+                            st.warning(f"⚠️ This will make the problem infeasible. Please adjust either the force start date or the shutdown period.")
                         else:
-                            st.warning(f"⚠️ Cannot enforce force start date for grade '{grade}' on plant '{plant}' - combination not allowed")
+                            var = get_is_producing_var(grade, plant, start_day_index)
+                            if var is not None:
+                                model.Add(var == 1)
+                                st.info(f"✅ Enforced force start date for grade '{grade}' on plant '{plant}' at day {start_date}")
+                            else:
+                                st.warning(f"⚠️ Cannot enforce force start date for grade '{grade}' on plant '{plant}' - combination not allowed")
                     except ValueError:
                         st.warning(f"⚠️ Force start date '{start_date}' for grade '{grade}' on plant '{plant}' not found in demand dates")
             
@@ -895,13 +901,73 @@ if uploaded_file:
 
             solver = cp_model.CpSolver()
             solver.parameters.max_time_in_seconds = time_limit_min * 60.0
+            solver.parameters.log_search_progress = True
             solution_callback = SolutionCallback(production, inventory_vars, stockout_vars, is_producing, grades, lines, dates, formatted_dates, num_days)
 
             start_time = time.time()
             status = solver.Solve(model, solution_callback)
             
             progress_bar.progress(100)
-            status_text.markdown('<div class="success-box">✅ Optimization completed successfully!</div>', unsafe_allow_html=True)
+            
+            # Provide detailed feedback based on solver status
+            if status == cp_model.OPTIMAL:
+                status_text.markdown('<div class="success-box">✅ Optimization completed successfully! Optimal solution found.</div>', unsafe_allow_html=True)
+            elif status == cp_model.FEASIBLE:
+                status_text.markdown('<div class="success-box">✅ Optimization completed! Feasible solution found (may not be optimal).</div>', unsafe_allow_html=True)
+            elif status == cp_model.INFEASIBLE:
+                status_text.markdown('<div style="padding: 1rem; border-radius: 0.5rem; background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24;">❌ No feasible solution found. The constraints are too restrictive.</div>', unsafe_allow_html=True)
+                
+                st.markdown("### 🔍 Troubleshooting Tips:")
+                st.markdown("""
+                **Common issues when using plant shutdowns:**
+                1. **Insufficient production capacity**: Shutdowns reduce available production days. Check if remaining capacity can meet demand.
+                2. **Inventory constraints too tight**: Min/Max inventory limits combined with shutdowns may be impossible to satisfy.
+                3. **Min closing inventory too high**: The target closing inventory may not be achievable with shutdown periods.
+                4. **Force start dates conflict**: Force start dates during or near shutdowns may create conflicts.
+                5. **Min run days too high**: Long minimum run requirements combined with shutdowns may not fit in the schedule.
+                
+                **Suggestions:**
+                - Reduce min closing inventory requirements
+                - Increase initial inventory (opening inventory)
+                - Reduce buffer days requirement
+                - Check if shutdown periods overlap with critical production needs
+                - Relax min/max inventory constraints
+                - Remove or adjust force start dates
+                - Consider reducing min run days for some grades
+                """)
+                
+                # Show capacity analysis
+                st.markdown("### 📊 Capacity Analysis:")
+                total_demand = {}
+                for grade in grades:
+                    total_demand[grade] = sum(demand_data[grade].get(date, 0) for date in dates[:num_days - buffer_days])
+                
+                available_capacity = {}
+                for line in lines:
+                    shutdown_days = len(plant_shutdown_dates[line])
+                    total_days = num_days - buffer_days
+                    available_days = total_days - shutdown_days
+                    available_capacity[line] = available_days * capacities[line]
+                    
+                    st.write(f"**{line}**: {available_days} days available (out of {total_days}), Capacity: {available_capacity[line]:,.0f} MT")
+                    if shutdown_days > 0:
+                        st.write(f"  - Shutdown: {shutdown_days} days")
+                
+                total_available = sum(available_capacity.values())
+                total_required = sum(total_demand.values())
+                
+                st.write(f"**Total Available Capacity**: {total_available:,.0f} MT")
+                st.write(f"**Total Demand**: {total_required:,.0f} MT")
+                
+                if total_required > total_available:
+                    st.error(f"⚠️ **Demand exceeds available capacity by {(total_required - total_available):,.0f} MT!** This is likely causing infeasibility.")
+                
+                st.stop()
+            elif status == cp_model.MODEL_INVALID:
+                status_text.markdown('<div style="padding: 1rem; border-radius: 0.5rem; background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24;">❌ Model is invalid. Please check input data.</div>', unsafe_allow_html=True)
+                st.stop()
+            else:
+                status_text.markdown('<div style="padding: 1rem; border-radius: 0.5rem; background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404;">⚠️ Optimization status unknown.</div>', unsafe_allow_html=True)
 
             st.markdown('<div class="section-header">📈 Results</div>', unsafe_allow_html=True)
 
