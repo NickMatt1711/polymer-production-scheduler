@@ -750,7 +750,7 @@ if uploaded_file:
                         model.Add(deficit >= 0)
                         objective += stockout_penalty * deficit
             
-            # SOFT Minimum Closing Inventory constraint
+            # Minimum Closing Inventory constraint
             for grade in grades:
                 closing_inventory = inventory_vars[(grade, num_days - buffer_days)]
                 min_closing = min_closing_inventory[grade]
@@ -843,28 +843,83 @@ if uploaded_file:
                             if current_prod is not None:
                                 model.Add(current_prod == 1).OnlyEnforceIf(is_end)
                                 model.Add(is_end == 1).OnlyEnforceIf(current_prod)
-                    
-                    # RELAXED minimum run days: only enforce if not interrupted by shutdown
+            
+                    # MINIMUM RUN DAYS: If we start a run, it must continue for at least min_run days
+                    # (unless interrupted by shutdown)
                     for d in range(num_days):
                         is_start = is_start_vars[(grade, line, d)]
                         
-                        # Check if we can have a run of at least min_run days starting from d
-                        possible_run_length = 0
-                        shutdown_interrupts = False
+                        # Check how many consecutive non-shutdown days we have from day d
+                        max_possible_run = 0
                         for k in range(min_run):
                             if d + k < num_days:
+                                # Check if this day is a shutdown day
                                 if line in shutdown_periods and (d + k) in shutdown_periods[line]:
-                                    shutdown_interrupts = True
                                     break
-                                possible_run_length += 1
+                                max_possible_run += 1
                         
-                        # Only enforce min run if we have enough consecutive non-shutdown days
-                        if possible_run_length >= min_run and not shutdown_interrupts:
+                        # Only enforce if we have enough consecutive days available
+                        if max_possible_run >= min_run:
+                            # Force production for the next min_run days (if no shutdown)
                             for k in range(min_run):
                                 if d + k < num_days:
+                                    # Skip if this is a shutdown day
+                                    if line in shutdown_periods and (d + k) in shutdown_periods[line]:
+                                        continue
                                     future_prod = get_is_producing_var(grade, line, d + k)
                                     if future_prod is not None:
                                         model.Add(future_prod == 1).OnlyEnforceIf(is_start)
+            
+                    # MAXIMUM RUN DAYS: A run cannot exceed max_run days
+                    # This is the key fix - we need to ensure runs don't go too long
+                    for d in range(num_days):
+                        # For each possible start day, ensure the run ends within max_run days
+                        if d + max_run < num_days:
+                            # Create a variable that indicates if the run continues beyond max_run days
+                            run_too_long = model.NewBoolVar(f'run_too_long_{grade}_{line}_{d}')
+                            
+                            # Check if we start at d and are still producing at d + max_run
+                            start_var = is_start_vars[(grade, line, d)]
+                            still_producing_var = get_is_producing_var(grade, line, d + max_run)
+                            
+                            if start_var is not None and still_producing_var is not None:
+                                # If we start at d and are still producing at d + max_run, that's a violation
+                                model.AddBoolAnd([start_var, still_producing_var]).OnlyEnforceIf(run_too_long)
+                                model.AddBoolOr([start_var.Not(), still_producing_var.Not()]).OnlyEnforceIf(run_too_long.Not())
+                                
+                                # Force that run_too_long must be false (the run cannot be too long)
+                                model.Add(run_too_long == 0)
+                        
+                        # Alternative approach: Use cumulative constraints for run length
+                        # This ensures that between any start and end, the distance is <= max_run
+                        for start_d in range(d):
+                            if d - start_d > max_run:
+                                start_var = is_start_vars[(grade, line, start_d)]
+                                end_before_d = []
+                                for end_d in range(start_d + 1, min(start_d + max_run + 1, num_days)):
+                                    if (grade, line, end_d) in run_end_vars:
+                                        end_before_d.append(run_end_vars[(grade, line, end_d)])
+                                
+                                # If we started at start_d, we must have ended by start_d + max_run
+                                if end_before_d:
+                                    model.AddBoolOr(end_before_d).OnlyEnforceIf(start_var)
+            
+                    # SIMPLER APPROACH: Use sequence constraints
+                    # Create a sequence of production days and enforce max run length
+                    production_sequence = []
+                    for day in range(num_days):
+                        prod_var = get_is_producing_var(grade, line, day)
+                        if prod_var is not None:
+                            production_sequence.append(prod_var)
+                    
+                    if production_sequence:
+                        # Add constraints to break long runs
+                        for start_idx in range(len(production_sequence) - max_run):
+                            # If we have a run of max_run+1 consecutive days, that's a violation
+                            long_run_vars = production_sequence[start_idx:start_idx + max_run + 1]
+                            if len(long_run_vars) == max_run + 1:
+                                # Cannot have all these variables be true
+                                model.Add(sum(long_run_vars) <= max_run)
             
             for line in lines:
                 if transition_rules.get(line):
