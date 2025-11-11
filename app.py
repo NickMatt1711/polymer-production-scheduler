@@ -965,10 +965,13 @@ if uploaded_file:
                 production_totals = {}
                 grade_totals = {}
                 plant_totals = {line: 0 for line in lines}
+                stockout_totals = {}
                 
                 for grade in grades:
                     production_totals[grade] = {}
                     grade_totals[grade] = 0
+                    stockout_totals[grade] = 0
+                    
                     for line in lines:
                         total_prod = 0
                         for d in range(num_days):
@@ -978,19 +981,27 @@ if uploaded_file:
                         production_totals[grade][line] = total_prod
                         grade_totals[grade] += total_prod
                         plant_totals[line] += total_prod
+                    
+                    # Calculate total stockout for this grade
+                    for d in range(num_days):
+                        key = (grade, d)
+                        if key in stockout_vars:
+                            stockout_totals[grade] += solver.Value(stockout_vars[key])
                 
                 total_prod_data = []
                 for grade in grades:
                     row = {'Grade': grade}
                     for line in lines:
                         row[line] = production_totals[grade][line]
-                    row['Total'] = grade_totals[grade]
+                    row['Total Produced'] = grade_totals[grade]
+                    row['Total Stockout'] = stockout_totals[grade]
                     total_prod_data.append(row)
                 
                 totals_row = {'Grade': 'Total'}
                 for line in lines:
                     totals_row[line] = plant_totals[line]
-                totals_row['Total'] = sum(plant_totals.values())
+                totals_row['Total Produced'] = sum(plant_totals.values())
+                totals_row['Total Stockout'] = sum(stockout_totals.values())
                 total_prod_data.append(totals_row)
                 
                 total_prod_df = pd.DataFrame(total_prod_data)
