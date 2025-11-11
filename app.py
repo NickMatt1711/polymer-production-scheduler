@@ -469,6 +469,21 @@ if uploaded_file:
                 max_run_days_per_combo = {}  # (grade, line) -> max_run_days
                 allowed_lines_per_grade = {}  # grade -> list of lines
 
+                # ADDED: Material running info processing
+                material_running_info = {}
+                for index, row in plant_df.iterrows():
+                    plant = row['Plant']
+                    material = row['Material Running']
+                    expected_days = row['Expected Run Days']
+                    
+                    if pd.notna(material) and pd.notna(expected_days):
+                        try:
+                            material_running_info[plant] = (str(material).strip(), int(expected_days))
+                        except (ValueError, TypeError):
+                            st.warning(f"⚠️ Invalid Material Running or Expected Run Days for plant '{plant}', ignoring")
+                    elif pd.notna(material) or pd.notna(expected_days):
+                        st.warning(f"⚠️ Incomplete Material Running info for plant '{plant}', ignoring both fields")
+
                 # Process inventory data with duplicate grades allowed
                 for index, row in inventory_df.iterrows():
                     grade = row['Grade Name']
