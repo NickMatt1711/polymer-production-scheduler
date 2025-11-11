@@ -34,15 +34,15 @@ def create_sample_workbook():
         plant_df = pd.DataFrame(plant_data)
         plant_df.to_excel(writer, sheet_name='Plant', index=False)
         
-        # Inventory sheet with more realistic constraints
+        # Inventory sheet with original constraints
         inventory_data = {
             'Grade Name': ['BOPP', 'Moulding', 'Raffia', 'TQPP', 'Yarn'],
             'Opening Inventory': [500, 16000, 3000, 1700, 2500],
-            'Min. Closing Inventory': [1000, 2000, 1000, 500, 500],
+            'Min. Closing Inventory': [5000, 5000, 5000, 1500, 2000],
             'Min. Inventory': [500, 1000, 1000, 0, 0],
             'Max. Inventory': [20000, 20000, 20000, 6000, 6000],
-            'Min. Run Days': [3, 1, 1, 2, 2],
-            'Max. Run Days': [10, 10, 10, 8, 8],
+            'Min. Run Days': [5, 1, 1, 3, 2],
+            'Max. Run Days': [6, 6, 6, 5, 5],
             'Increment Days': ['', '', '', '', ''],
             'Force Start Date': ['', '', '', '', ''],
             'Lines': ['Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant2'],
@@ -69,11 +69,11 @@ def create_sample_workbook():
         
         demand_data = {
             'Date': dates,
-            'BOPP': [400] * num_days_in_month,  # Reduced demand to make it feasible
-            'Moulding': [400] * num_days_in_month,
-            'Raffia': [600] * num_days_in_month,
-            'TQPP': [300] * num_days_in_month,
-            'Yarn': [100] * num_days_in_month
+            'BOPP': [600] * num_days_in_month,
+            'Moulding': [500] * num_days_in_month,
+            'Raffia': [850] * num_days_in_month,
+            'TQPP': [400] * num_days_in_month,
+            'Yarn': [150] * num_days_in_month
         }
         demand_df = pd.DataFrame(demand_data)
         demand_df.to_excel(writer, sheet_name='Demand', index=False)
@@ -178,7 +178,7 @@ def process_shutdown_dates(plant_df, dates):
                 
                 if shutdown_days:
                     shutdown_periods[plant] = shutdown_days
-                    st.info(f"🔧 Shutdown scheduled for {plant}: {start_date} to {end_date} ({len(shutdown_days)} days)")
+                    st.info(f"🔧 Shutdown scheduled for {plant}: {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({len(shutdown_days)} days)")
                 else:
                     shutdown_periods[plant] = []
                     st.info(f"ℹ️ Shutdown period for {plant} is outside planning horizon")
@@ -553,7 +553,7 @@ if uploaded_file:
                         if pd.notna(row['Force Start Date']):
                             try:
                                 force_start_date[grade_plant_key] = pd.to_datetime(row['Force Start Date']).date()
-                                st.info(f"📅 Force start date for grade '{grade}' on plant '{plant}': {force_start_date[grade_plant_key]}")
+                                st.info(f"📅 Force start date for grade '{grade}' on plant '{plant}': {force_start_date[grade_plant_key].strftime('%d-%b-%y')}")
                             except:
                                 force_start_date[grade_plant_key] = None
                                 st.warning(f"⚠️ Invalid Force Start Date for grade '{grade}' on plant '{plant}'")
@@ -746,19 +746,9 @@ if uploaded_file:
                         model.Add(deficit == 0).OnlyEnforceIf(below_min.Not())
                         objective += stockout_penalty * deficit
             
-            # Relaxed constraint: Only enforce min closing inventory if possible
+            # Original constraint: Strict minimum closing inventory
             for grade in grades:
-                # Use a soft constraint for min closing inventory
-                closing_inventory = inventory_vars[(grade, num_days - buffer_days)]
-                min_closing = min_closing_inventory[grade]
-                if min_closing > 0:
-                    closing_deficit = model.NewIntVar(0, 100000, f'closing_deficit_{grade}')
-                    below_closing_min = model.NewBoolVar(f'below_closing_min_{grade}')
-                    model.Add(closing_inventory < min_closing).OnlyEnforceIf(below_closing_min)
-                    model.Add(closing_inventory >= min_closing).OnlyEnforceIf(below_closing_min.Not())
-                    model.Add(closing_deficit == min_closing - closing_inventory).OnlyEnforceIf(below_closing_min)
-                    model.Add(closing_deficit == 0).OnlyEnforceIf(below_closing_min.Not())
-                    objective += stockout_penalty * closing_deficit * 2  # Higher penalty for closing inventory
+                model.Add(inventory_vars[(grade, num_days - buffer_days)] >= int(min_closing_inventory[grade]))
             
             for grade in grades:
                 for d in range(1, num_days + 1):
@@ -766,9 +756,6 @@ if uploaded_file:
             
             for line in lines:
                 for d in range(num_days - buffer_days):
-                    # Only require full capacity if not in shutdown
-                    if line in shutdown_periods and d in shutdown_periods[line]:
-                        continue  # Skip shutdown days
                     production_vars = [
                         get_production_var(grade, line, d) 
                         for grade in grades 
@@ -795,69 +782,45 @@ if uploaded_file:
                         var = get_is_producing_var(grade, plant, start_day_index)
                         if var is not None:
                             model.Add(var == 1)
-                            st.info(f"✅ Enforced force start date for grade '{grade}' on plant '{plant}' at day {start_date}")
+                            st.info(f"✅ Enforced force start date for grade '{grade}' on plant '{plant}' at day {start_date.strftime('%d-%b-%y')}")
                         else:
                             st.warning(f"⚠️ Cannot enforce force start date for grade '{grade}' on plant '{plant}' - combination not allowed")
                     except ValueError:
-                        st.warning(f"⚠️ Force start date '{start_date}' for grade '{grade}' on plant '{plant}' not found in demand dates")
+                        st.warning(f"⚠️ Force start date '{start_date.strftime('%d-%b-%y')}' for grade '{grade}' on plant '{plant}' not found in demand dates")
             
-            # Relaxed Minimum & Maximum Run Days per (grade, plant)
+            # Original Minimum & Maximum Run Days per (grade, plant)
             is_start_vars = {}
-            run_end_vars = {}
-            
             for grade in grades:
                 for line in allowed_lines[grade]:
                     grade_plant_key = (grade, line)
                     min_run = min_run_days.get(grade_plant_key, 1)
                     max_run = max_run_days.get(grade_plant_key, 9999)
                     
-                    # Create start and end variables
-                    for d in range(num_days):
+                    for d in range(num_days - min_run + 1):
                         is_start = model.NewBoolVar(f'start_{grade}_{line}_{d}')
                         is_start_vars[(grade, line, d)] = is_start
                         
-                        is_end = model.NewBoolVar(f'end_{grade}_{line}_{d}')
-                        run_end_vars[(grade, line, d)] = is_end
-                        
                         current_prod = get_is_producing_var(grade, line, d)
-                        
-                        # Start definition: producing today but not yesterday (or today is day 0)
                         if d > 0:
                             prev_prod = get_is_producing_var(grade, line, d - 1)
-                            model.AddBoolAnd([current_prod, prev_prod.Not()]).OnlyEnforceIf(is_start)
-                            model.AddBoolOr([current_prod.Not(), prev_prod]).OnlyEnforceIf(is_start.Not())
+                            if current_prod is not None and prev_prod is not None:
+                                model.AddBoolAnd([current_prod, prev_prod.Not()]).OnlyEnforceIf(is_start)
+                                model.AddBoolOr([current_prod.Not(), prev_prod]).OnlyEnforceIf(is_start.Not())
                         else:
-                            model.Add(current_prod == 1).OnlyEnforceIf(is_start)
-                            model.Add(is_start == 1).OnlyEnforceIf(current_prod)
-                        
-                        # End definition: producing today but not tomorrow (or today is last day)
-                        if d < num_days - 1:
-                            next_prod = get_is_producing_var(grade, line, d + 1)
-                            model.AddBoolAnd([current_prod, next_prod.Not()]).OnlyEnforceIf(is_end)
-                            model.AddBoolOr([current_prod.Not(), next_prod]).OnlyEnforceIf(is_end.Not())
-                        else:
-                            model.Add(current_prod == 1).OnlyEnforceIf(is_end)
-                            model.Add(is_end == 1).OnlyEnforceIf(current_prod)
-                    
-                    # Relaxed minimum run days: only enforce if not interrupted by shutdown
-                    for d in range(num_days):
-                        is_start = is_start_vars[(grade, line, d)]
-                        
-                        # Check if we can have a run of at least min_run days starting from d
-                        possible_run_length = 0
-                        for k in range(min_run):
+                            if current_prod is not None:
+                                model.Add(current_prod == 1).OnlyEnforceIf(is_start)
+                                model.Add(is_start == 1).OnlyEnforceIf(current_prod)
+            
+                        for k in range(1, min_run):
                             if d + k < num_days:
-                                if line in shutdown_periods and (d + k) in shutdown_periods[line]:
-                                    break  # Shutdown interrupts the run
-                                possible_run_length += 1
-                        
-                        # Only enforce min run if we have enough consecutive non-shutdown days
-                        if possible_run_length >= min_run:
-                            for k in range(min_run):
-                                if d + k < num_days:
-                                    future_prod = get_is_producing_var(grade, line, d + k)
-                                    if future_prod is not None:
-                                        model.Add(future_prod == 1).OnlyEnforceIf(is_start)
+                                future_prod = get_is_producing_var(grade, line, d + k)
+                                if future_prod is not None:
+                                    model.Add(future_prod == 1).OnlyEnforceIf(is_start)
+            
+                        if max_run < num_days and d + max_run < num_days:
+                            future_prod = get_is_producing_var(grade, line, d + max_run)
+                            if future_prod is not None:
+                                model.Add(future_prod == 0).OnlyEnforceIf(is_start)
             
             for line in lines:
                 if transition_rules.get(line):
@@ -876,16 +839,49 @@ if uploaded_file:
                                         if prev_var is not None and current_var is not None:
                                             model.Add(prev_var + current_var <= 1)
 
-            # Relaxed Rerun Allowed Constraints
+            # Original Rerun Allowed Constraints per (grade, plant)
+            month_starts = {}
+            month_ends = {}
+            for d, date in enumerate(dates):
+                key = (date.year, date.month)
+                if key not in month_starts:
+                    month_starts[key] = d
+                month_ends[key] = d
+
             for grade in grades:
                 for line in allowed_lines[grade]:
                     grade_plant_key = (grade, line)
                     if not rerun_allowed.get(grade_plant_key, True):
-                        # Simplified constraint: if rerun not allowed, don't start multiple runs
-                        starts = [is_start_vars[(grade, line, d)] for d in range(num_days) 
-                                 if (grade, line, d) in is_start_vars]
-                        if starts:
-                            model.Add(sum(starts) <= 1)
+                        for (year, month), start_day in month_starts.items():
+                            end_day = month_ends[(year, month)]
+                            produced_in_month = [is_producing[(grade, line, d)] for d in range(start_day, end_day + 1) if (grade, line, d) in is_producing]
+                            if produced_in_month:
+                                produced_at_all = model.NewBoolVar(f'produced_at_all_{grade}_{line}_{year}_{month}')
+                                model.AddBoolOr(produced_in_month).OnlyEnforceIf(produced_at_all)
+                                model.Add(sum(produced_in_month) == 0).OnlyEnforceIf(produced_at_all.Not())
+                                
+                                min_run = min_run_days.get(grade_plant_key, 1)
+                                days_producing = model.NewIntVar(0, end_day - start_day + 1, f'days_producing_{grade}_{line}_{year}_{month}')
+                                model.Add(days_producing == sum(produced_in_month))
+                                has_production = model.NewBoolVar(f'has_production_{grade}_{line}_{year}_{month}')
+                                model.Add(days_producing >= min_run).OnlyEnforceIf(has_production)
+                                model.Add(days_producing == 0).OnlyEnforceIf(has_production.Not())
+                                model.AddImplication(produced_at_all, has_production)
+                                starts_in_month = []
+                                for d in range(start_day, end_day + 1):
+                                    if (grade, line, d) in is_producing:
+                                        if d > start_day:
+                                            prev_d = d - 1
+                                            is_start = model.NewBoolVar(f'is_start_{grade}_{line}_{d}_{year}_{month}')
+                                            model.AddBoolAnd([is_producing[(grade, line, d)], is_producing[(grade, line, prev_d)].Not()]).OnlyEnforceIf(is_start)
+                                            model.AddBoolOr([is_producing[(grade, line, d)].Not(), is_producing[(grade, line, prev_d)]]).OnlyEnforceIf(is_start.Not())
+                                            starts_in_month.append(is_start)
+                                        else:
+                                            is_start = model.NewBoolVar(f'is_start_{grade}_{line}_{d}_{year}_{month}')
+                                            model.Add(is_producing[(grade, line, d)] == 1).OnlyEnforceIf(is_start)
+                                            starts_in_month.append(is_start)
+                                if starts_in_month:
+                                    model.Add(sum(starts_in_month) <= 1).OnlyEnforceIf(produced_at_all)
 
             for grade in grades:
                 for d in range(num_days):
@@ -922,8 +918,6 @@ if uploaded_file:
 
             solver = cp_model.CpSolver()
             solver.parameters.max_time_in_seconds = time_limit_min * 60.0
-            solver.parameters.num_search_workers = 8  # Use more workers for better performance
-            
             solution_callback = SolutionCallback(production, inventory_vars, stockout_vars, is_producing, grades, lines, dates, formatted_dates, num_days)
 
             start_time = time.time()
@@ -937,7 +931,7 @@ if uploaded_file:
             elif status == cp_model.FEASIBLE:
                 status_text.markdown('<div class="success-box">✅ Optimization completed with feasible solution!</div>', unsafe_allow_html=True)
             else:
-                status_text.markdown('<div class="info-box">⚠️ Optimization ended without proven optimal solution.</div>', unsafe_allow_html=True)
+                status_text.markdown('<div class="info-box">⚠️ No feasible solution found. Please check your constraints.</div>', unsafe_allow_html=True)
 
             st.markdown('<div class="section-header">📈 Results</div>', unsafe_allow_html=True)
 
@@ -1338,7 +1332,6 @@ else:
         <li><strong>Multi-Plant Force Start Dates:</strong> Specify different force start dates for the same grade on different plants</li>
         <li><strong>Plant Shutdowns:</strong> Define maintenance periods where production is halted</li>
         <li><strong>Shutdown Visualization:</strong> Clear visual indicators for shutdown periods in production schedules</li>
-        <li><strong>Relaxed Constraints:</strong> Better handling of infeasible scenarios with helpful error messages</li>
     </ul>
     </div>
     """, unsafe_allow_html=True)
@@ -1358,7 +1351,7 @@ else:
         - Ready-to-use structure for the optimization
         - Shows how to specify different force start dates for the same grade on different plants
         - Includes example shutdown periods for Plant2 with visual indicators
-        - Uses realistic constraints that are more likely to be feasible
+        - Uses original realistic constraints
         """)
     
     with col2:
