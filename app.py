@@ -22,14 +22,12 @@ def create_sample_workbook():
     output = io.BytesIO()
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Plant sheet with shutdown columns
+        # Plant sheet
         plant_data = {
             'Plant': ['Plant1', 'Plant2'],
             'Capacity per day': [1500, 1000],
             'Material Running': ['Moulding', 'BOPP'],
-            'Expected Run Days': [1, 3],
-            'Shutdown Start Date': ['', '15-Dec-24'],
-            'Shutdown End Date': ['', '17-Dec-24']
+            'Expected Run Days': [1, 3]
         }
         plant_df = pd.DataFrame(plant_data)
         plant_df.to_excel(writer, sheet_name='Plant', index=False)
@@ -418,68 +416,30 @@ if uploaded_file:
             if 'best_solution' not in st.session_state:
                 st.session_state.best_solution = None
             
-            status_text.markdown('<div class="info-box">📄 Preprocessing data...</div>', unsafe_allow_html=True)
+            status_text.markdown('<div class="info-box">🔄 Preprocessing data...</div>', unsafe_allow_html=True)
             progress_bar.progress(10)
             
             try:
-                # Process plant data with shutdown information
+                # MODIFIED: Process inventory data with grade-plant combinations
                 num_lines = len(plant_df)
                 lines = list(plant_df['Plant'])
                 capacities = {row['Plant']: row['Capacity per day'] for index, row in plant_df.iterrows()}
                 
-                # Process plant shutdown data from Plant sheet
-                plant_shutdown_dates = {line: [] for line in lines}
-                plant_shutdown_info = {line: None for line in lines}
-                
-                for index, row in plant_df.iterrows():
-                    plant = row['Plant']
-                    start_date = row.get('Shutdown Start Date')
-                    end_date = row.get('Shutdown End Date')
-                    
-                    if pd.notna(start_date) and pd.notna(end_date) and start_date != '' and end_date != '':
-                        try:
-                            start = pd.to_datetime(start_date).date()
-                            end = pd.to_datetime(end_date).date()
-                            
-                            # Store shutdown info
-                            plant_shutdown_info[plant] = (start, end)
-                            
-                            # Generate all dates in the shutdown period
-                            current = start
-                            while current <= end:
-                                plant_shutdown_dates[plant].append(current)
-                                current += timedelta(days=1)
-                            
-                            shutdown_days = (end - start).days + 1
-                            st.info(f"🚫 Plant '{plant}' shutdown: {start.strftime('%d-%b-%y')} to {end.strftime('%d-%b-%y')} ({shutdown_days} days)")
-                            
-                            # Validate: maximum 1 shutdown per month
-                            months_in_shutdown = set()
-                            current = start
-                            while current <= end:
-                                months_in_shutdown.add((current.year, current.month))
-                                current += timedelta(days=1)
-                            
-                            if len(months_in_shutdown) > 1:
-                                st.warning(f"⚠️ Plant '{plant}' shutdown spans multiple months ({len(months_in_shutdown)} months). This is allowed but note the constraint is max 1 shutdown per month.")
-                            
-                        except Exception as e:
-                            st.warning(f"⚠️ Could not parse shutdown dates for plant '{plant}': {e}")
-                
                 # Get unique grades from demand sheet
                 grades = [col for col in demand_df.columns if col != demand_df.columns[0]]
                 
-                # Store inventory parameters per (grade, plant) combination
-                initial_inventory = {}
-                min_inventory = {}
-                max_inventory = {}
-                min_closing_inventory = {}
-                min_run_days = {}
-                max_run_days = {}
-                force_start_date = {}
-                allowed_lines = {grade: [] for grade in grades}
-                rerun_allowed = {}
+                # NEW: Store inventory parameters per (grade, plant) combination
+                initial_inventory = {}  # Global per grade
+                min_inventory = {}  # Global per grade
+                max_inventory = {}  # Global per grade
+                min_closing_inventory = {}  # Global per grade
+                min_run_days = {}  # Per (grade, plant)
+                max_run_days = {}  # Per (grade, plant)
+                force_start_date = {}  # Per (grade, plant)
+                allowed_lines = {grade: [] for grade in grades}  # List of lines per grade
+                rerun_allowed = {}  # Per (grade, plant)
                 
+                # Track which grades have global inventory settings defined
                 grade_inventory_defined = set()
                 
                 for index, row in inventory_df.iterrows():
@@ -493,11 +453,12 @@ if uploaded_file:
                         plants_for_row = lines
                         st.warning(f"⚠️ Lines for grade '{grade}' (row {index}) are not specified, allowing all lines")
                     
+                    # Add plants to allowed_lines for this grade
                     for plant in plants_for_row:
                         if plant not in allowed_lines[grade]:
                             allowed_lines[grade].append(plant)
                     
-                    # Global inventory parameters
+                    # Global inventory parameters (only set once per grade)
                     if grade not in grade_inventory_defined:
                         if pd.notna(row['Opening Inventory']):
                             initial_inventory[grade] = row['Opening Inventory']
@@ -525,16 +486,19 @@ if uploaded_file:
                     for plant in plants_for_row:
                         grade_plant_key = (grade, plant)
                         
+                        # Min Run Days
                         if pd.notna(row['Min. Run Days']):
                             min_run_days[grade_plant_key] = int(row['Min. Run Days'])
                         else:
                             min_run_days[grade_plant_key] = 1
                         
+                        # Max Run Days
                         if pd.notna(row['Max. Run Days']):
                             max_run_days[grade_plant_key] = int(row['Max. Run Days'])
                         else:
                             max_run_days[grade_plant_key] = 9999
                         
+                        # Force Start Date
                         if pd.notna(row['Force Start Date']):
                             try:
                                 force_start_date[grade_plant_key] = pd.to_datetime(row['Force Start Date']).date()
@@ -545,6 +509,7 @@ if uploaded_file:
                         else:
                             force_start_date[grade_plant_key] = None
                         
+                        # Rerun Allowed
                         rerun_val = row['Rerun Allowed']
                         if pd.notna(rerun_val) and isinstance(rerun_val, str) and rerun_val.strip().lower() == 'no':
                             rerun_allowed[grade_plant_key] = False
@@ -624,24 +589,15 @@ if uploaded_file:
                         key = (grade, line, d)
                         is_producing[key] = model.NewBoolVar(f'is_producing_{grade}_{line}_{d}')
                         
-                        # Check if plant is shutdown on this day
-                        current_date = dates[d]
-                        is_shutdown = current_date in plant_shutdown_dates.get(line, [])
-                        
-                        if is_shutdown:
-                            # Force production to be zero during shutdown
-                            model.Add(is_producing[key] == 0)
-                            production[key] = 0
+                        if d < num_days - buffer_days:
+                            production_value = model.NewIntVar(0, capacities[line], f'production_{grade}_{line}_{d}')
+                            model.Add(production_value == capacities[line]).OnlyEnforceIf(is_producing[key])
+                            model.Add(production_value == 0).OnlyEnforceIf(is_producing[key].Not())
                         else:
-                            if d < num_days - buffer_days:
-                                production_value = model.NewIntVar(0, capacities[line], f'production_{grade}_{line}_{d}')
-                                model.Add(production_value == capacities[line]).OnlyEnforceIf(is_producing[key])
-                                model.Add(production_value == 0).OnlyEnforceIf(is_producing[key].Not())
-                            else:
-                                production_value = model.NewIntVar(0, capacities[line], f'production_{grade}_{line}_{d}')
-                                model.Add(production_value <= capacities[line] * is_producing[key])
-                            
-                            production[key] = production_value
+                            production_value = model.NewIntVar(0, capacities[line], f'production_{grade}_{line}_{d}')
+                            model.Add(production_value <= capacities[line] * is_producing[key])
+                        
+                        production[key] = production_value
             
             def get_production_var(grade, line, d):
                 key = (grade, line, d)
@@ -750,28 +706,22 @@ if uploaded_file:
                     if production_vars:
                         model.Add(sum(production_vars) <= capacities[line])
             
-            # Force Start Date per (grade, plant) combination
+            # MODIFIED: Force Start Date per (grade, plant) combination
             for grade_plant_key, start_date in force_start_date.items():
                 if start_date:
                     grade, plant = grade_plant_key
                     try:
                         start_day_index = dates.index(start_date)
-                        
-                        # Check if plant is shutdown on force start date
-                        if start_date in plant_shutdown_dates.get(plant, []):
-                            st.error(f"❌ Conflict: Force start date for grade '{grade}' on plant '{plant}' ({start_date}) falls during a shutdown period!")
-                            st.warning(f"⚠️ This will make the problem infeasible. Please adjust either the force start date or the shutdown period.")
+                        var = get_is_producing_var(grade, plant, start_day_index)
+                        if var is not None:
+                            model.Add(var == 1)
+                            st.info(f"✅ Enforced force start date for grade '{grade}' on plant '{plant}' at day {start_date}")
                         else:
-                            var = get_is_producing_var(grade, plant, start_day_index)
-                            if var is not None:
-                                model.Add(var == 1)
-                                st.info(f"✅ Enforced force start date for grade '{grade}' on plant '{plant}' at day {start_date}")
-                            else:
-                                st.warning(f"⚠️ Cannot enforce force start date for grade '{grade}' on plant '{plant}' - combination not allowed")
+                            st.warning(f"⚠️ Cannot enforce force start date for grade '{grade}' on plant '{plant}' - combination not allowed")
                     except ValueError:
                         st.warning(f"⚠️ Force start date '{start_date}' for grade '{grade}' on plant '{plant}' not found in demand dates")
             
-            # Minimum & Maximum Run Days per (grade, plant)
+            # MODIFIED: Minimum & Maximum Run Days per (grade, plant)
             is_start_vars = {}
             for grade in grades:
                 for line in allowed_lines[grade]:
@@ -822,7 +772,7 @@ if uploaded_file:
                                         if prev_var is not None and current_var is not None:
                                             model.Add(prev_var + current_var <= 1)
 
-            # Rerun Allowed Constraints per (grade, plant)
+            # MODIFIED: Rerun Allowed Constraints per (grade, plant)
             month_starts = {}
             month_ends = {}
             for d, date in enumerate(dates):
@@ -901,73 +851,13 @@ if uploaded_file:
 
             solver = cp_model.CpSolver()
             solver.parameters.max_time_in_seconds = time_limit_min * 60.0
-            solver.parameters.log_search_progress = True
             solution_callback = SolutionCallback(production, inventory_vars, stockout_vars, is_producing, grades, lines, dates, formatted_dates, num_days)
 
             start_time = time.time()
             status = solver.Solve(model, solution_callback)
             
             progress_bar.progress(100)
-            
-            # Provide detailed feedback based on solver status
-            if status == cp_model.OPTIMAL:
-                status_text.markdown('<div class="success-box">✅ Optimization completed successfully! Optimal solution found.</div>', unsafe_allow_html=True)
-            elif status == cp_model.FEASIBLE:
-                status_text.markdown('<div class="success-box">✅ Optimization completed! Feasible solution found (may not be optimal).</div>', unsafe_allow_html=True)
-            elif status == cp_model.INFEASIBLE:
-                status_text.markdown('<div style="padding: 1rem; border-radius: 0.5rem; background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24;">❌ No feasible solution found. The constraints are too restrictive.</div>', unsafe_allow_html=True)
-                
-                st.markdown("### 🔍 Troubleshooting Tips:")
-                st.markdown("""
-                **Common issues when using plant shutdowns:**
-                1. **Insufficient production capacity**: Shutdowns reduce available production days. Check if remaining capacity can meet demand.
-                2. **Inventory constraints too tight**: Min/Max inventory limits combined with shutdowns may be impossible to satisfy.
-                3. **Min closing inventory too high**: The target closing inventory may not be achievable with shutdown periods.
-                4. **Force start dates conflict**: Force start dates during or near shutdowns may create conflicts.
-                5. **Min run days too high**: Long minimum run requirements combined with shutdowns may not fit in the schedule.
-                
-                **Suggestions:**
-                - Reduce min closing inventory requirements
-                - Increase initial inventory (opening inventory)
-                - Reduce buffer days requirement
-                - Check if shutdown periods overlap with critical production needs
-                - Relax min/max inventory constraints
-                - Remove or adjust force start dates
-                - Consider reducing min run days for some grades
-                """)
-                
-                # Show capacity analysis
-                st.markdown("### 📊 Capacity Analysis:")
-                total_demand = {}
-                for grade in grades:
-                    total_demand[grade] = sum(demand_data[grade].get(date, 0) for date in dates[:num_days - buffer_days])
-                
-                available_capacity = {}
-                for line in lines:
-                    shutdown_days = len(plant_shutdown_dates[line])
-                    total_days = num_days - buffer_days
-                    available_days = total_days - shutdown_days
-                    available_capacity[line] = available_days * capacities[line]
-                    
-                    st.write(f"**{line}**: {available_days} days available (out of {total_days}), Capacity: {available_capacity[line]:,.0f} MT")
-                    if shutdown_days > 0:
-                        st.write(f"  - Shutdown: {shutdown_days} days")
-                
-                total_available = sum(available_capacity.values())
-                total_required = sum(total_demand.values())
-                
-                st.write(f"**Total Available Capacity**: {total_available:,.0f} MT")
-                st.write(f"**Total Demand**: {total_required:,.0f} MT")
-                
-                if total_required > total_available:
-                    st.error(f"⚠️ **Demand exceeds available capacity by {(total_required - total_available):,.0f} MT!** This is likely causing infeasibility.")
-                
-                st.stop()
-            elif status == cp_model.MODEL_INVALID:
-                status_text.markdown('<div style="padding: 1rem; border-radius: 0.5rem; background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24;">❌ Model is invalid. Please check input data.</div>', unsafe_allow_html=True)
-                st.stop()
-            else:
-                status_text.markdown('<div style="padding: 1rem; border-radius: 0.5rem; background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404;">⚠️ Optimization status unknown.</div>', unsafe_allow_html=True)
+            status_text.markdown('<div class="success-box">✅ Optimization completed successfully!</div>', unsafe_allow_html=True)
 
             st.markdown('<div class="section-header">📈 Results</div>', unsafe_allow_html=True)
 
@@ -995,13 +885,10 @@ if uploaded_file:
                 production_totals = {}
                 grade_totals = {}
                 plant_totals = {line: 0 for line in lines}
-                stockout_totals = {}
                 
                 for grade in grades:
                     production_totals[grade] = {}
                     grade_totals[grade] = 0
-                    stockout_totals[grade] = 0
-                    
                     for line in lines:
                         total_prod = 0
                         for d in range(num_days):
@@ -1011,27 +898,19 @@ if uploaded_file:
                         production_totals[grade][line] = total_prod
                         grade_totals[grade] += total_prod
                         plant_totals[line] += total_prod
-                    
-                    # Calculate total stockout for this grade
-                    for d in range(num_days):
-                        key = (grade, d)
-                        if key in stockout_vars:
-                            stockout_totals[grade] += solver.Value(stockout_vars[key])
                 
                 total_prod_data = []
                 for grade in grades:
                     row = {'Grade': grade}
                     for line in lines:
                         row[line] = production_totals[grade][line]
-                    row['Total Produced'] = grade_totals[grade]
-                    row['Total Stockout'] = stockout_totals[grade]
+                    row['Total'] = grade_totals[grade]
                     total_prod_data.append(row)
                 
                 totals_row = {'Grade': 'Total'}
                 for line in lines:
                     totals_row[line] = plant_totals[line]
-                totals_row['Total Produced'] = sum(plant_totals.values())
-                totals_row['Total Stockout'] = sum(stockout_totals.values())
+                totals_row['Total'] = sum(plant_totals.values())
                 total_prod_data.append(totals_row)
                 
                 total_prod_df = pd.DataFrame(total_prod_data)
@@ -1293,12 +1172,11 @@ else:
     st.markdown("""
     <div class="info-box">
     <h3>Welcome to the Polymer Production Scheduler! 🏭</h3>
-    <p><strong>Features:</strong></p>
+    <p>This application helps optimize your polymer production schedule by:</p>
     <ul>
         <li>📊 Analyzing plant capacities and inventory constraints</li>
         <li>⚡ Optimizing production sequences to minimize transitions</li>
         <li>📈 Balancing inventory levels and meeting demand</li>
-        <li>🚫 Managing plant shutdowns (max 1 per plant per month)</li>
         <li>💾 Generating detailed production schedules and reports</li>
     </ul>
     <p><strong>To get started:</strong></p>
@@ -1307,12 +1185,8 @@ else:
         <li>Configure optimization parameters in the sidebar</li>
         <li>Run the optimization and view results</li>
     </ol>
-    <p><strong>Key Features: Multi-Plant Force Start Dates & Plant Shutdowns</strong></p>
-    <ul>
-        <li>Specify different force start dates for the same grade on different plants</li>
-        <li>Configure plant shutdowns directly in the Plant sheet (max 1 shutdown per month per plant)</li>
-        <li>Optimizer automatically plans around shutdown periods</li>
-    </ul>
+    <p><strong>NEW: Multi-Plant Force Start Dates</strong></p>
+    <p>You can now specify different force start dates for the same grade on different plants by listing the grade multiple times in the Inventory sheet with different 'Lines' and 'Force Start Date' values.</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1329,8 +1203,7 @@ else:
         - Includes all required sheets with proper formatting
         - Contains sample data that you can modify
         - Ready-to-use structure for the optimization
-        - Shows plant shutdown configuration in Plant sheet
-        - Demonstrates multi-plant force start dates
+        - Shows how to specify different force start dates for the same grade on different plants
         """)
     
     with col2:
@@ -1351,10 +1224,6 @@ else:
         - `Capacity per day`: Daily production capacity
         - `Material Running`: Currently running material (optional)
         - `Expected Run Days`: Expected run days (optional)
-        - `Shutdown Start Date`: Start date of shutdown period (optional, DD-MMM-YY format, e.g., 15-Dec-24)
-        - `Shutdown End Date`: End date of shutdown period (optional, DD-MMM-YY format, e.g., 17-Dec-24)
-        
-        *Note: Each plant can have maximum 1 shutdown per month. Leave blank if no shutdown. During shutdown, production is zero.*
         
         **2. Inventory Sheet**
         - `Grade Name`: Material grades (can be repeated for multi-plant configurations)
@@ -1389,6 +1258,6 @@ else:
 
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: gray;'>Polymer Production Scheduler • Built with Streamlit • Multi-Plant Support with Shutdown Management</div>",
+    "<div style='text-align: center; color: gray;'>Polymer Production Scheduler • Built with Streamlit • Multi-Plant Support</div>",
     unsafe_allow_html=True
 )
