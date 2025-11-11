@@ -1285,6 +1285,22 @@ if uploaded_file:
                 
                     annotations = [
                         dict(
+                            x=start_x, y=start_val,
+                            text=f"Start: {start_val:.0f}",
+                            showarrow=True, arrowhead=2,
+                            ax=-40, ay=30,
+                            font=dict(color="black", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        ),
+                        dict(
+                            x=end_x, y=end_val,
+                            text=f"End: {end_val:.0f}",
+                            showarrow=True, arrowhead=2,
+                            ax=40, ay=30,
+                            font=dict(color="black", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        ),
+                        dict(
                             x=highest_x, y=highest_val,
                             text=f"High: {highest_val:.0f}",
                             showarrow=True, arrowhead=2,
