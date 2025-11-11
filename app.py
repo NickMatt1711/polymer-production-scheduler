@@ -32,19 +32,19 @@ def create_sample_workbook():
         plant_df = pd.DataFrame(plant_data)
         plant_df.to_excel(writer, sheet_name='Plant', index=False)
         
-        # Inventory sheet - UPDATED with multiple rows per grade for different plants
+        # Inventory sheet 
         inventory_data = {
-            'Grade Name': ['BOPP', 'BOPP', 'Moulding', 'Moulding', 'Raffia', 'Raffia', 'TQPP', 'TQPP', 'Yarn'],
-            'Opening Inventory': [500, '', 16000, '', 3000, '', 1700, '', 2500],
-            'Min. Closing Inventory': [5000, '', 5000, '', 5000, '', 1500, '', 2000],
-            'Min. Inventory': [500, '', 1000, '', 1000, '', 0, '', 0],
-            'Max. Inventory': [20000, '', 20000, '', 20000, '', 6000, '', 6000],
-            'Min. Run Days': [5, 5, 1, 1, 1, 1, 3, 3, 2],
-            'Max. Run Days': [6, 6, 6, 6, 6, 6, 5, 5, 5],
-            'Increment Days': ['', '', '', '', '', '', '', '', ''],
-            'Force Start Date': ['', '01-Dec-24', '', '', '', '', '', '', ''],
-            'Lines': ['Plant1', 'Plant2', 'Plant1', 'Plant2', 'Plant1', 'Plant2', 'Plant1', 'Plant2', 'Plant2'],
-            'Rerun Allowed': ['Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'No', 'No', 'No']
+            'Grade Name': ['BOPP', 'Moulding', 'Raffia', 'TQPP', 'Yarn'],
+            'Opening Inventory': [500, 16000, 3000, 1700, 2500],
+            'Min. Closing Inventory': [5000, 5000, 5000, 1500, 2000],
+            'Min. Inventory': [500, 1000, 1000, 0, 0],
+            'Max. Inventory': [20000, 20000, 20000, 6000, 6000],
+            'Min. Run Days': [5, 1, 1, 3, 2],
+            'Max. Run Days': [6, 6, 6, 5, 5],
+            'Increment Days': ['', '', '', '', ''],
+            'Force Start Date': ['', '', '', '', ''],
+            'Lines': ['Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant2'],
+            'Rerun Allowed': ['Yes', 'Yes', 'Yes', 'No', 'No']
         }
         inventory_df = pd.DataFrame(inventory_data)
         inventory_df.to_excel(writer, sheet_name='Inventory', index=False)
