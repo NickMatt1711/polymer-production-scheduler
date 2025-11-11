@@ -457,6 +457,7 @@ if uploaded_file:
             progress_bar.progress(10)
             
             try:
+                # Data preprocessing with corrected column names and default values
                 num_lines = len(plant_df)
                 lines = list(plant_df['Plant'])
                 capacities = {row['Plant']: row['Capacity per day'] for index, row in plant_df.iterrows()}
@@ -501,7 +502,37 @@ if uploaded_file:
                 allowed_lines = {}
                 for grade in grades:
                     allowed_lines[grade] = [r['Line'] for r in inventory_records if r['Grade'] == grade]
+                
+                # --- Material running info with error handling (keep as before) ---
+                material_running_info = {}
+                for index, row in plant_df.iterrows():
+                    plant = row['Plant']
+                    material = row['Material Running']
+                    expected_days = row['Expected Run Days']
+                
+                    if pd.notna(material) and pd.notna(expected_days):
+                        try:
+                            material_running_info[plant] = (str(material).strip(), int(expected_days))
+                        except (ValueError, TypeError):
+                            st.warning(f"⚠️ Invalid Material Running or Expected Run Days for plant '{plant}', ignoring")
+                    elif pd.notna(material) or pd.notna(expected_days):
+                        st.warning(f"⚠️ Incomplete Material Running info for plant '{plant}', ignoring both fields")
 
+            
+                # Material running info with error handling
+                material_running_info = {}
+                for index, row in plant_df.iterrows():
+                    plant = row['Plant']
+                    material = row['Material Running']
+                    expected_days = row['Expected Run Days']
+                    
+                    if pd.notna(material) and pd.notna(expected_days):
+                        try:
+                            material_running_info[plant] = (str(material).strip(), int(expected_days))
+                        except (ValueError, TypeError):
+                            st.warning(f"⚠️ Invalid Material Running or Expected Run Days for plant '{plant}', ignoring")
+                    elif pd.notna(material) or pd.notna(expected_days):
+                        st.warning(f"⚠️ Incomplete Material Running info for plant '{plant}', ignoring both fields")
                 
             except Exception as e:
                 st.error(f"Error in data preprocessing: {str(e)}")
@@ -702,18 +733,21 @@ if uploaded_file:
                     if production_vars:  # Only add constraint if there are variables
                         model.Add(sum(production_vars) <= capacities[line])
             
-            # --- Force Start Date (now per grade-line) ---
-            for (grade, line), start_date in force_start_date.items():
-                if start_date:
+            # Force Start Date - WITH SAFETY CHECKS
+            for grade in grades:
+                if force_start_date[grade]:
                     try:
-                        start_day_index = dates.index(start_date)
-                        var = get_is_producing_var(grade, line, start_day_index)
-                        if var is not None:
-                            model.Add(var == 1)
-                        st.info(f"Force start date for {grade} in {line}: {start_date}")
+                        start_day_index = dates.index(force_start_date[grade])
+                        force_production_constraints = []
+                        for line in allowed_lines[grade]:  # Only consider allowed lines
+                            var = get_is_producing_var(grade, line, start_day_index)
+                            if var is not None:
+                                force_production_constraints.append(var)
+                        if force_production_constraints:
+                            model.AddBoolOr(force_production_constraints)
+                        st.info(f"Force start date for grade '{grade}' set to day ({force_start_date[grade]})")
                     except ValueError:
-                        st.warning(f"Force start date {start_date} for {grade} in {line} not found in demand dates.")
-
+                        st.warning(f"Force start date '{force_start_date[grade]}' for grade '{grade}' not found in demand dates.")
             
             # Minimum & Maximum Run Days - WITH SAFETY CHECKS
             is_start_vars = {}
