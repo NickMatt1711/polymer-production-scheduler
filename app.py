@@ -456,7 +456,7 @@ if uploaded_file:
         
         st.markdown('<div class="section-header">🚀 Optimization</div>', unsafe_allow_html=True)
         
-        if st.button("Run Production Optimization", type="primary", width="content"):
+        if st.button("Run Production Optimization", type="primary", use_container_width=True):
             
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -1344,11 +1344,12 @@ else:
         <li>Configure optimization parameters in the sidebar</li>
         <li>Run the optimization and view results</li>
     </ol>
-    <p><strong>EATURES:</strong></p>
+    <p><strong>NEW FEATURES:</strong></p>
     <ul>
         <li><strong>Multi-Plant Force Start Dates:</strong> Specify different force start dates for the same grade on different plants</li>
         <li><strong>Plant Shutdowns:</strong> Define maintenance periods where production is halted</li>
         <li><strong>Shutdown Visualization:</strong> Clear visual indicators for shutdown periods in production schedules</li>
+        <li><strong>Relaxed Constraints:</strong> Better handling of infeasible scenarios with helpful error messages</li>
     </ul>
     </div>
     """, unsafe_allow_html=True)
