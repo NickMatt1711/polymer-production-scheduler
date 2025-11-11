@@ -457,6 +457,10 @@ if uploaded_file:
             progress_bar.progress(10)
             
             try:
+                num_lines = len(plant_df)
+                lines = list(plant_df['Plant'])
+                capacities = {row['Plant']: row['Capacity per day'] for index, row in plant_df.iterrows()}
+                
                 # --- Modified Inventory Preprocessing: Allow duplicate grades per plant ---
                 inventory_records = []
                 
