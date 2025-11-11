@@ -503,22 +503,7 @@ if uploaded_file:
                 for grade in grades:
                     allowed_lines[grade] = [r['Line'] for r in inventory_records if r['Grade'] == grade]
                 
-                # --- Material running info with error handling (keep as before) ---
-                material_running_info = {}
-                for index, row in plant_df.iterrows():
-                    plant = row['Plant']
-                    material = row['Material Running']
-                    expected_days = row['Expected Run Days']
-                
-                    if pd.notna(material) and pd.notna(expected_days):
-                        try:
-                            material_running_info[plant] = (str(material).strip(), int(expected_days))
-                        except (ValueError, TypeError):
-                            st.warning(f"⚠️ Invalid Material Running or Expected Run Days for plant '{plant}', ignoring")
-                    elif pd.notna(material) or pd.notna(expected_days):
-                        st.warning(f"⚠️ Incomplete Material Running info for plant '{plant}', ignoring both fields")
-
-            
+                          
                 # Material running info with error handling
                 material_running_info = {}
                 for index, row in plant_df.iterrows():
