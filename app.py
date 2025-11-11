@@ -18,16 +18,18 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 def create_sample_workbook():
-    """Create a sample Excel workbook with the required format"""
+    """Create a sample Excel workbook with the required format including shutdown dates"""
     output = io.BytesIO()
     
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Plant sheet
+        # Plant sheet with shutdown dates
         plant_data = {
             'Plant': ['Plant1', 'Plant2'],
             'Capacity per day': [1500, 1000],
             'Material Running': ['Moulding', 'BOPP'],
-            'Expected Run Days': [1, 3]
+            'Expected Run Days': [1, 3],
+            'Shutdown Start Date': [None, '2025-11-15'],
+            'Shutdown End Date': [None, '2025-11-18']
         }
         plant_df = pd.DataFrame(plant_data)
         plant_df.to_excel(writer, sheet_name='Plant', index=False)
@@ -107,6 +109,12 @@ def create_sample_workbook():
                 for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):
                     for cell in row:
                         cell.number_format = 'DD-MMM-YY'
+            
+            if sheet_name == 'Plant':
+                for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=5, max_col=6):
+                    for cell in row:
+                        if cell.value:
+                            cell.number_format = 'DD-MMM-YY'
         
         def autofit_columns(ws):
             for column in ws.columns:
@@ -114,6 +122,8 @@ def create_sample_workbook():
                 column_letter = column[0].column_letter
                 
                 if ws.title == 'Demand' and column_letter == 'A':
+                    max_length = 9
+                elif ws.title == 'Plant' and column_letter in ['E', 'F']:
                     max_length = 9
                 else:
                     for cell in column:
@@ -139,6 +149,47 @@ def create_sample_workbook():
     output.seek(0)
     return output
 
+def process_shutdown_dates(plant_df, dates):
+    """Process shutdown dates for each plant"""
+    shutdown_periods = {}
+    
+    for index, row in plant_df.iterrows():
+        plant = row['Plant']
+        shutdown_start = row.get('Shutdown Start Date')
+        shutdown_end = row.get('Shutdown End Date')
+        
+        # Check if both start and end dates are provided
+        if pd.notna(shutdown_start) and pd.notna(shutdown_end):
+            try:
+                start_date = pd.to_datetime(shutdown_start).date()
+                end_date = pd.to_datetime(shutdown_end).date()
+                
+                # Validate date range
+                if start_date > end_date:
+                    st.warning(f"⚠️ Shutdown start date after end date for {plant}. Ignoring shutdown.")
+                    shutdown_periods[plant] = []
+                    continue
+                
+                # Find day indices for shutdown period
+                shutdown_days = []
+                for d, date in enumerate(dates):
+                    if start_date <= date <= end_date:
+                        shutdown_days.append(d)
+                
+                if shutdown_days:
+                    shutdown_periods[plant] = shutdown_days
+                    st.info(f"🔧 Shutdown scheduled for {plant}: {start_date} to {end_date} ({len(shutdown_days)} days)")
+                else:
+                    shutdown_periods[plant] = []
+                    st.info(f"ℹ️ Shutdown period for {plant} is outside planning horizon")
+                    
+            except Exception as e:
+                st.warning(f"⚠️ Invalid shutdown dates for {plant}: {e}")
+                shutdown_periods[plant] = []
+        else:
+            shutdown_periods[plant] = []
+    
+    return shutdown_periods
 
 st.set_page_config(
     page_title="Polymer Production Scheduler",
@@ -420,7 +471,7 @@ if uploaded_file:
             progress_bar.progress(10)
             
             try:
-                # MODIFIED: Process inventory data with grade-plant combinations
+                # Process inventory data with grade-plant combinations
                 num_lines = len(plant_df)
                 lines = list(plant_df['Plant'])
                 capacities = {row['Plant']: row['Capacity per day'] for index, row in plant_df.iterrows()}
@@ -428,7 +479,7 @@ if uploaded_file:
                 # Get unique grades from demand sheet
                 grades = [col for col in demand_df.columns if col != demand_df.columns[0]]
                 
-                # NEW: Store inventory parameters per (grade, plant) combination
+                # Store inventory parameters per (grade, plant) combination
                 initial_inventory = {}  # Global per grade
                 min_inventory = {}  # Global per grade
                 max_inventory = {}  # Global per grade
@@ -558,6 +609,9 @@ if uploaded_file:
                     if date not in demand_data[grade]:
                         demand_data[grade][date] = 0
             
+            # Process shutdown dates
+            shutdown_periods = process_shutdown_dates(plant_df, dates)
+            
             # Process transition rules
             transition_rules = {}
             for line, df in transition_dfs.items():
@@ -610,6 +664,18 @@ if uploaded_file:
                 if key not in is_producing:
                     return None
                 return is_producing[key]
+            
+            # SHUTDOWN CONSTRAINTS: No production during shutdown periods
+            for line in lines:
+                if line in shutdown_periods and shutdown_periods[line]:
+                    for d in shutdown_periods[line]:
+                        for grade in grades:
+                            if is_allowed_combination(grade, line):
+                                key = (grade, line, d)
+                                if key in is_producing:
+                                    # Force no production during shutdown
+                                    model.Add(is_producing[key] == 0)
+                                    model.Add(production[key] == 0)
             
             inventory_vars = {}
             for grade in grades:
@@ -706,7 +772,7 @@ if uploaded_file:
                     if production_vars:
                         model.Add(sum(production_vars) <= capacities[line])
             
-            # MODIFIED: Force Start Date per (grade, plant) combination
+            # Force Start Date per (grade, plant) combination
             for grade_plant_key, start_date in force_start_date.items():
                 if start_date:
                     grade, plant = grade_plant_key
@@ -721,7 +787,7 @@ if uploaded_file:
                     except ValueError:
                         st.warning(f"⚠️ Force start date '{start_date}' for grade '{grade}' on plant '{plant}' not found in demand dates")
             
-            # MODIFIED: Minimum & Maximum Run Days per (grade, plant)
+            # Minimum & Maximum Run Days per (grade, plant)
             is_start_vars = {}
             for grade in grades:
                 for line in allowed_lines[grade]:
@@ -772,7 +838,7 @@ if uploaded_file:
                                         if prev_var is not None and current_var is not None:
                                             model.Add(prev_var + current_var <= 1)
 
-            # MODIFIED: Rerun Allowed Constraints per (grade, plant)
+            # Rerun Allowed Constraints per (grade, plant)
             month_starts = {}
             month_ends = {}
             for d, date in enumerate(dates):
@@ -1177,6 +1243,7 @@ else:
         <li>📊 Analyzing plant capacities and inventory constraints</li>
         <li>⚡ Optimizing production sequences to minimize transitions</li>
         <li>📈 Balancing inventory levels and meeting demand</li>
+        <li>🔧 Handling plant shutdowns and maintenance periods</li>
         <li>💾 Generating detailed production schedules and reports</li>
     </ul>
     <p><strong>To get started:</strong></p>
@@ -1185,8 +1252,11 @@ else:
         <li>Configure optimization parameters in the sidebar</li>
         <li>Run the optimization and view results</li>
     </ol>
-    <p><strong>NEW: Multi-Plant Force Start Dates</strong></p>
-    <p>You can now specify different force start dates for the same grade on different plants by listing the grade multiple times in the Inventory sheet with different 'Lines' and 'Force Start Date' values.</p>
+    <p><strong>NEW FEATURES:</strong></p>
+    <ul>
+        <li><strong>Multi-Plant Force Start Dates:</strong> Specify different force start dates for the same grade on different plants</li>
+        <li><strong>Plant Shutdowns:</strong> Define maintenance periods where production is halted</li>
+    </ul>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1204,6 +1274,7 @@ else:
         - Contains sample data that you can modify
         - Ready-to-use structure for the optimization
         - Shows how to specify different force start dates for the same grade on different plants
+        - Includes example shutdown periods for Plant2
         """)
     
     with col2:
@@ -1224,6 +1295,8 @@ else:
         - `Capacity per day`: Daily production capacity
         - `Material Running`: Currently running material (optional)
         - `Expected Run Days`: Expected run days (optional)
+        - `Shutdown Start Date`: Start date of plant shutdown/maintenance (optional)
+        - `Shutdown End Date`: End date of plant shutdown/maintenance (optional)
         
         **2. Inventory Sheet**
         - `Grade Name`: Material grades (can be repeated for multi-plant configurations)
@@ -1245,6 +1318,13 @@ else:
         ```
         This allows BOPP to run on both Plant1 and Plant2, but with a forced start on Plant2 on Dec 1.
         
+        **Shutdown Period Example:**
+        ```
+        Plant  | Capacity | Shutdown Start Date | Shutdown End Date
+        Plant1 | 1500     | 15-Nov-25           | 18-Nov-25
+        ```
+        During this period, Plant1 will have zero production.
+        
         **3. Demand Sheet**
         - First column: Dates
         - Subsequent columns: Demand for each grade (column names should match grade names)
@@ -1258,6 +1338,6 @@ else:
 
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: gray;'>Polymer Production Scheduler • Built with Streamlit • Multi-Plant Support</div>",
+    "<div style='text-align: center; color: gray;'>Polymer Production Scheduler • Built with Streamlit • Multi-Plant Support • Shutdown Management</div>",
     unsafe_allow_html=True
 )
