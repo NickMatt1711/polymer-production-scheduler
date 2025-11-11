@@ -28,8 +28,8 @@ def create_sample_workbook():
             'Capacity per day': [1500, 1000],
             'Material Running': ['Moulding', 'BOPP'],
             'Expected Run Days': [1, 3],
-            'Shutdown Start Date': [None, '2025-11-15'],
-            'Shutdown End Date': [None, '2025-11-18']
+            'Shutdown Start Date': [None, '15-Nov-2025'],
+            'Shutdown End Date': [None, '18-Nov-2025']
         }
         plant_df = pd.DataFrame(plant_data)
         plant_df.to_excel(writer, sheet_name='Plant', index=False)
@@ -1114,7 +1114,7 @@ if uploaded_file:
                             opacity=0.2,
                             layer="below",
                             line_width=0,
-                            annotation_text="SHUTDOWN",
+                            annotation_text="Shutdown",
                             annotation_position="top left",
                             annotation_font_size=14,
                             annotation_font_color="red"
@@ -1211,7 +1211,7 @@ if uploaded_file:
                                 line_width=0,
                                 annotation_text=f"Shutdown: {line}" if not shutdown_added else "",
                                 annotation_position="top left",
-                                annotation_font_size=10,
+                                annotation_font_size=14,
                                 annotation_font_color="red"
                             )
                             shutdown_added = True
