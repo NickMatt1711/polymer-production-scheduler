@@ -1245,12 +1245,29 @@ if uploaded_file:
                         ),
                         plot_bgcolor="white",
                         paper_bgcolor="white",
-                        margin=dict(l=60, r=80, t=60, b=60),
+                        margin=dict(l=60, r=80, t=80, b=60),  # Increased top margin
                         font=dict(size=12),
                         height=420,
                         showlegend=False
                     )
-                    fig.update_layout(annotations=annotations)
+                    
+                    # Add annotations one by one with explicit parameters
+                    for ann in annotations:
+                        fig.add_annotation(
+                            x=ann['x'],
+                            y=ann['y'],
+                            text=ann['text'],
+                            showarrow=ann['showarrow'],
+                            arrowhead=ann['arrowhead'],
+                            ax=ann['ax'],
+                            ay=ann['ay'],
+                            font=ann['font'],
+                            bgcolor=ann['bgcolor'],
+                            bordercolor=ann['bordercolor'],
+                            borderwidth=1,
+                            borderpad=4,
+                            opacity=0.9
+                        )
                 
                     st.plotly_chart(fig, use_container_width=True)
 
