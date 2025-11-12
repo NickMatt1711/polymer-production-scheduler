@@ -314,6 +314,60 @@ if uploaded_file:
         
         excel_file.seek(0)
         
+        # Display shutdown periods right after data preview
+        st.markdown("---")
+        st.subheader("🔧 Plant Shutdown Periods")
+        shutdown_found = False
+        for index, row in plant_df.iterrows():
+            plant = row['Plant']
+            shutdown_start = row.get('Shutdown Start Date')
+            shutdown_end = row.get('Shutdown End Date')
+            
+            if pd.notna(shutdown_start) and pd.notna(shutdown_end):
+                try:
+                    start_date = pd.to_datetime(shutdown_start).date()
+                    end_date = pd.to_datetime(shutdown_end).date()
+                    duration = (end_date - start_date).days + 1
+                    
+                    if start_date > end_date:
+                        st.warning(f"⚠️ Invalid shutdown period for {plant}: Start date is after end date")
+                    else:
+                        st.info(f"**{plant}**: {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({duration} days)")
+                        shutdown_found = True
+                except Exception as e:
+                    st.warning(f"⚠️ Invalid shutdown dates for {plant}: {e}")
+        
+        if not shutdown_found:
+            st.info("ℹ️ No plant shutdowns scheduled")
+        
+        st.markdown("---")
+        st.subheader("📅 Force Start Dates")
+        force_start_found = False
+        for index, row in inventory_df.iterrows():
+            grade = row['Grade Name']
+            force_start = row.get('Force Start Date')
+            
+            if pd.notna(force_start):
+                try:
+                    start_date = pd.to_datetime(force_start).date()
+                    # Get lines for this row
+                    lines_value = row['Lines']
+                    if pd.notna(lines_value) and lines_value != '':
+                        plants_for_row = [x.strip() for x in str(lines_value).split(',')]
+                    else:
+                        plants_for_row = ['All Plants']
+                    
+                    for plant in plants_for_row:
+                        st.info(f"**{grade}** on **{plant}**: {start_date.strftime('%d-%b-%y')}")
+                        force_start_found = True
+                except Exception as e:
+                    pass
+        
+        if not force_start_found:
+            st.info("ℹ️ No force start dates specified")
+        
+        st.markdown("---")
+        
         transition_dfs = {}
         for i in range(len(plant_df)):
             plant_name = plant_df['Plant'].iloc[i]
@@ -439,7 +493,6 @@ if uploaded_file:
                         if pd.notna(row['Force Start Date']):
                             try:
                                 force_start_date[grade_plant_key] = pd.to_datetime(row['Force Start Date']).date()
-                                st.info(f"📅 Force start date for grade '{grade}' on plant '{plant}': {force_start_date[grade_plant_key].strftime('%d-%b-%y')}")
                             except:
                                 force_start_date[grade_plant_key] = None
                                 st.warning(f"⚠️ Invalid Force Start Date for grade '{grade}' on plant '{plant}'")
@@ -905,15 +958,6 @@ if uploaded_file:
                     st.metric("Total Stockouts", f"{total_stockouts:,.0f} MT")
                 with col4:
                     st.metric("Planning Horizon", f"{num_days} days")
-
-                # Display shutdown information
-                if shutdown_periods:
-                    st.subheader("🔧 Plant Shutdown Information")
-                    for line, shutdown_days in shutdown_periods.items():
-                        if shutdown_days:
-                            start_date = dates[shutdown_days[0]]
-                            end_date = dates[shutdown_days[-1]]
-                            st.info(f"**{line}**: {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({len(shutdown_days)} days)")
 
                 cmap = colormaps.get_cmap('tab20')
                 grade_colors = {}
