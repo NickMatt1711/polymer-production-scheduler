@@ -1111,6 +1111,8 @@ if uploaded_file:
                             layer="below",
                             line_width=0,
                             annotation_text="Shutdown",
+                            annotation_xanchor = "center",
+                            annotation_yanchor = "middle",
                             annotation_font_size=14,
                             annotation_font_color="red"
                         )
