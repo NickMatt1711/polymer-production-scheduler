@@ -1140,43 +1140,11 @@ if uploaded_file:
                 
                     start_x = dates[0]
                     end_x = dates[last_actual_day]
-                    
-                    # Find the actual dates for highest and lowest values
-                    highest_x = None
-                    lowest_x = None
-                    for d, val in enumerate(inventory_values[:last_actual_day + 1]):
-                        if val == highest_val:
-                            highest_x = dates[d]
-                        if val == lowest_val:
-                            lowest_x = dates[d]
+                    highest_x = dates[inventory_values.index(highest_val)]
+                    lowest_x = dates[inventory_values.index(lowest_val)]
                 
                     fig = go.Figure()
                 
-                    # Add shutdown periods FIRST (so they appear behind the data)
-                    grade_shutdown_periods = []
-                    for plant in allowed_lines[grade]:
-                        if plant in shutdown_periods and shutdown_periods[plant]:
-                            plant_shutdown_days = shutdown_periods[plant]
-                            if plant_shutdown_days:
-                                start_shutdown = dates[plant_shutdown_days[0]]
-                                end_shutdown = dates[plant_shutdown_days[-1]] + timedelta(days=1)
-                                grade_shutdown_periods.append((start_shutdown, end_shutdown, plant))
-                                
-                                # Add shutdown rectangle for each plant
-                                fig.add_vrect(
-                                    x0=start_shutdown,
-                                    x1=end_shutdown,
-                                    fillcolor="red",
-                                    opacity=0.2,
-                                    layer="below",
-                                    line_width=0,
-                                    annotation_text=f"{plant} SHUTDOWN",
-                                    annotation_position="top left",
-                                    annotation_font_size=10,
-                                    annotation_font_color="red"
-                                )
-                
-                    # Now add the main inventory line
                     fig.add_trace(go.Scatter(
                         x=dates,
                         y=inventory_values,
@@ -1187,109 +1155,98 @@ if uploaded_file:
                         hovertemplate="Date: %{x|%d-%b-%y}<br>Inventory: %{y:.0f} MT<extra></extra>"
                     ))
                 
-                    # Add inventory level lines
+                    # Add shutdown periods for plants that can produce this grade
+                    grade_shutdown_periods = []
+                    for plant in allowed_lines[grade]:
+                        if plant in shutdown_periods and shutdown_periods[plant]:
+                            # Get the shutdown period for this plant
+                            plant_shutdown_days = shutdown_periods[plant]
+                            if plant_shutdown_days:
+                                start_shutdown = dates[plant_shutdown_days[0]]
+                                end_shutdown = dates[plant_shutdown_days[-1]] + timedelta(days=1)
+                                grade_shutdown_periods.append((start_shutdown, end_shutdown, plant))
+                
+                    # Add shaded rectangles for shutdown periods
+                    for start_shutdown, end_shutdown, plant in grade_shutdown_periods:
+                        fig.add_vrect(
+                            x0=start_shutdown,
+                            x1=end_shutdown,
+                            fillcolor="red",
+                            opacity=0.15,
+                            layer="below",
+                            line_width=0,
+                            annotation_text=f"{plant} SHUTDOWN",
+                            annotation_position="top left",
+                            annotation_font_size=10,
+                            annotation_font_color="red"
+                        )
+                
                     fig.add_hline(
                         y=min_inventory[grade],
                         line=dict(color="red", width=2, dash="dash"),
                         annotation_text=f"Min: {min_inventory[grade]:,.0f}",
-                        annotation_position="bottom right",
+                        annotation_position="top left",
                         annotation_font_color="red"
                     )
-                    
-                    if max_inventory[grade] < 1000000:  # Only add if it's a reasonable value
-                        fig.add_hline(
-                            y=max_inventory[grade],
-                            line=dict(color="green", width=2, dash="dash"),
-                            annotation_text=f"Max: {max_inventory[grade]:,.0f}",
-                            annotation_position="top right",
-                            annotation_font_color="green"
-                        )
+                    fig.add_hline(
+                        y=max_inventory[grade],
+                        line=dict(color="green", width=2, dash="dash"),
+                        annotation_text=f"Max: {max_inventory[grade]:,.0f}",
+                        annotation_position="bottom left",
+                        annotation_font_color="green"
+                    )
                 
-                    # Create annotations list
-                    annotations = []
-                
-                    # Start annotation
-                    annotations.append(dict(
-                        x=start_x, 
-                        y=start_val,
-                        xref="x",
-                        yref="y",
-                        text=f"Start: {start_val:.0f}",
-                        showarrow=True,
-                        arrowhead=2,
-                        ax=-40, 
-                        ay=-40,
-                        bgcolor="white",
-                        bordercolor="gray",
-                        borderwidth=1
-                    ))
-                
-                    # End annotation
-                    annotations.append(dict(
-                        x=end_x, 
-                        y=end_val,
-                        xref="x",
-                        yref="y", 
-                        text=f"End: {end_val:.0f}",
-                        showarrow=True,
-                        arrowhead=2,
-                        ax=40, 
-                        ay=-40,
-                        bgcolor="white",
-                        bordercolor="gray", 
-                        borderwidth=1
-                    ))
-                
-                    # Highest point annotation
-                    if highest_x:
-                        annotations.append(dict(
-                            x=highest_x,
-                            y=highest_val,
-                            xref="x",
-                            yref="y",
+                    annotations = [
+                        dict(
+                            x=start_x, y=start_val,
+                            text=f"Start: {start_val:.0f}",
+                            showarrow=True, arrowhead=2,
+                            ax=-40, ay=30,
+                            font=dict(color="black", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        ),
+                        dict(
+                            x=end_x, y=end_val,
+                            text=f"End: {end_val:.0f}",
+                            showarrow=True, arrowhead=2,
+                            ax=40, ay=30,
+                            font=dict(color="black", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        ),
+                        dict(
+                            x=highest_x, y=highest_val,
                             text=f"High: {highest_val:.0f}",
-                            showarrow=True,
-                            arrowhead=2,
-                            ax=0,
-                            ay=-60,
-                            bgcolor="rgba(0,255,0,0.3)",
-                            bordercolor="green",
-                            borderwidth=1
-                        ))
-                
-                    # Lowest point annotation  
-                    if lowest_x:
-                        annotations.append(dict(
-                            x=lowest_x,
-                            y=lowest_val,
-                            xref="x",
-                            yref="y",
+                            showarrow=True, arrowhead=2,
+                            ax=0, ay=-40,
+                            font=dict(color="darkgreen", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        ),
+                        dict(
+                            x=lowest_x, y=lowest_val,
                             text=f"Low: {lowest_val:.0f}",
-                            showarrow=True,
-                            arrowhead=2,
-                            ax=0,
-                            ay=60,
-                            bgcolor="rgba(255,0,0,0.3)",
-                            bordercolor="red",
-                            borderwidth=1
-                        ))
+                            showarrow=True, arrowhead=2,
+                            ax=0, ay=40,
+                            font=dict(color="firebrick", size=11),
+                            bgcolor="white", bordercolor="gray"
+                        )
+                    ]
                 
-                    # Add shutdown info annotation if any shutdown periods exist
+                    # Add legend for shutdown periods if any exist
                     if grade_shutdown_periods:
                         shutdown_plants = list(set([plant for _, _, plant in grade_shutdown_periods]))
-                        shutdown_text = f"Shutdown: {', '.join(shutdown_plants)}"
-                        annotations.append(dict(
+                        shutdown_info = f"Shutdown periods: {', '.join(shutdown_plants)}"
+                        fig.add_annotation(
                             x=0.02,
                             y=0.98,
                             xref="paper",
                             yref="paper",
-                            text=shutdown_text,
+                            text=shutdown_info,
                             showarrow=False,
-                            bgcolor="rgba(255,255,255,0.9)",
+                            bgcolor="rgba(255,255,255,0.8)",
                             bordercolor="red",
                             borderwidth=1,
                             font=dict(size=10, color="red")
-                        ))
+                        )
                 
                     fig.update_layout(
                         title=f"Inventory Level - {grade}",
@@ -1297,8 +1254,9 @@ if uploaded_file:
                             title="Date",
                             showgrid=True,
                             gridcolor="lightgray",
+                            tickvals=dates,
                             tickformat="%d-%b",
-                            type="date"
+                            dtick="D1"
                         ),
                         yaxis=dict(
                             title="Inventory Volume (MT)",
@@ -1308,9 +1266,9 @@ if uploaded_file:
                         annotations=annotations,
                         plot_bgcolor="white",
                         paper_bgcolor="white",
-                        margin=dict(l=60, r=80, t=80, b=80),
+                        margin=dict(l=60, r=80, t=60, b=60),
                         font=dict(size=12),
-                        height=450,
+                        height=420,
                         showlegend=False
                     )
                 
