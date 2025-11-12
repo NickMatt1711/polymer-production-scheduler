@@ -298,8 +298,14 @@ if uploaded_file:
             try:
                 excel_file.seek(0)
                 inventory_df = pd.read_excel(excel_file, sheet_name='Inventory')
+                inventory_display_df = inventory_df.copy()
+                force_start_column = inventory_display_df.columns[7]
+                
+                if pd.api.types.is_datetime64_any_dtype(inventory_display_df[force_start_column]):
+                    inventory_display_df[force_start_column] = inventory_display_df[start_column].dt.strftime('%d-%b-%y')
+                
                 st.subheader("Inventory Data")
-                st.dataframe(inventory_df, use_container_width=True)
+                st.dataframe(inventory_display_df, use_container_width=True)
             except Exception as e:
                 st.error(f"Error reading Inventory sheet: {e}")
                 st.stop()
