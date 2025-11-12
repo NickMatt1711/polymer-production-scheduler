@@ -340,32 +340,7 @@ if uploaded_file:
         if not shutdown_found:
             st.info("ℹ️ No plant shutdowns scheduled")
         
-        st.markdown("---")
-        st.subheader("📅 Force Start Dates")
-        force_start_found = False
-        for index, row in inventory_df.iterrows():
-            grade = row['Grade Name']
-            force_start = row.get('Force Start Date')
-            
-            if pd.notna(force_start):
-                try:
-                    start_date = pd.to_datetime(force_start).date()
-                    # Get lines for this row
-                    lines_value = row['Lines']
-                    if pd.notna(lines_value) and lines_value != '':
-                        plants_for_row = [x.strip() for x in str(lines_value).split(',')]
-                    else:
-                        plants_for_row = ['All Plants']
-                    
-                    for plant in plants_for_row:
-                        st.info(f"**{grade}** on **{plant}**: {start_date.strftime('%d-%b-%y')}")
-                        force_start_found = True
-                except Exception as e:
-                    pass
-        
-        if not force_start_found:
-            st.info("ℹ️ No force start dates specified")
-        
+               
         st.markdown("---")
         
         transition_dfs = {}
