@@ -279,8 +279,12 @@ if uploaded_file:
         with col1:
             try:
                 plant_df = pd.read_excel(excel_file, sheet_name='Plant')
+                plant_display_df = plant_df.copy()
+                date_column = plant_display_df.columns[4:5]
+                if pd.api.types.is_datetime64_any_dtype(plant_display_df[date_column]):
+                    plant_display_df[date_column] = plant_display_df[date_column].dt.strftime('%d-%b-%y')
                 st.subheader("Plant Data")
-                st.dataframe(plant_df, use_container_width=True)
+                st.dataframe(plant_display_df, use_container_width=True)
             except Exception as e:
                 st.error(f"Error reading Plant sheet: {e}")
                 st.stop()
