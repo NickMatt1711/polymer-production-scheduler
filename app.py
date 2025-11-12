@@ -1109,20 +1109,11 @@ if uploaded_file:
                             fillcolor="red",
                             opacity=0.2,
                             layer="below",
-                            line_width=0
-                        )
-                        
-                        # add a separate annotation centered inside the vrect
-                        fig.add_annotation(
-                            x=(start_shutdown + end_shutdown) / 2,  # horizontal center
-                            xref="x",
-                            y=0.5,                                  # vertical center in paper coords
-                            yref="paper",
-                            text="Shutdown",
-                            showarrow=False,
-                            font=dict(size=14, color="red"),
-                            xanchor="center",   # center horizontally
-                            yanchor="middle"    # center vertically
+                            line_width=0,
+                            annotation_text="Shutdown",
+                            annotation_position="top left",
+                            annotation_font_size=14,
+                            annotation_font_color="red"
                         )
                 
                     fig.update_yaxes(
