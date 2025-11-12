@@ -280,9 +280,14 @@ if uploaded_file:
             try:
                 plant_df = pd.read_excel(excel_file, sheet_name='Plant')
                 plant_display_df = plant_df.copy()
-                date_column = plant_display_df.columns[4:5]
-                if pd.api.types.is_datetime64_any_dtype(plant_display_df[date_column]):
-                    plant_display_df[date_column] = plant_display_df[date_column].dt.strftime('%d-%b-%y')
+                start_column = plant_display_df.columns[4]
+                end_column = plant_display_df.columns[5]
+                
+                if pd.api.types.is_datetime64_any_dtype(plant_display_df[start_column]):
+                    plant_display_df[start_column] = plant_display_df[start_column].dt.strftime('%d-%b-%y')
+                if pd.api.types.is_datetime64_any_dtype(plant_display_df[end_column]):
+                    plant_display_df[end_column] = plant_display_df[end_column].dt.strftime('%d-%b-%y')
+
                 st.subheader("Plant Data")
                 st.dataframe(plant_display_df, use_container_width=True)
             except Exception as e:
