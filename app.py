@@ -16,137 +16,24 @@ import tempfile
 import os
 import plotly.express as px
 import plotly.graph_objects as go
+from pathlib import Path
 
-def create_sample_workbook():
-    """Create a sample Excel workbook with the required format including shutdown dates"""
-    output = io.BytesIO()
-    
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Plant sheet with shutdown dates
-        plant_data = {
-            'Plant': ['Plant1', 'Plant2'],
-            'Capacity per day': [1500, 1000],
-            'Material Running': ['Moulding', 'BOPP'],
-            'Expected Run Days': [1, 3],
-            'Shutdown Start Date': [None, '2025-11-15'],
-            'Shutdown End Date': [None, '2025-11-18']
-        }
-        plant_df = pd.DataFrame(plant_data)
-        plant_df.to_excel(writer, sheet_name='Plant', index=False)
+def get_sample_workbook():
+    """Retrieve the sample workbook from the same directory as app.py"""
+    try:
+        # Get the directory where app.py is located
+        current_dir = Path(__file__).parent
+        sample_path = current_dir / "polymer_production_template.xlsx"
         
-        # Inventory sheet
-        inventory_data = {
-            'Grade Name': ['BOPP', 'Moulding', 'Raffia', 'TQPP', 'Yarn'],
-            'Opening Inventory': [500, 16000, 3000, 1700, 2500],
-            'Min. Closing Inventory': [5000, 5000, 5000, 1500, 2000],
-            'Min. Inventory': [500, 1000, 1000, 0, 0],
-            'Max. Inventory': [20000, 20000, 20000, 6000, 6000],
-            'Min. Run Days': [5, 1, 1, 3, 2],
-            'Max. Run Days': [6, 6, 6, 5, 5],
-            'Force Start Date': ['', '', '', '', ''],
-            'Lines': ['Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant1, Plant2', 'Plant2'],
-            'Rerun Allowed': ['Yes', 'Yes', 'Yes', 'No', 'No']
-        }
-        inventory_df = pd.DataFrame(inventory_data)
-        inventory_df.to_excel(writer, sheet_name='Inventory', index=False)
-        
-        # Demand sheet
-        import calendar
-        from datetime import datetime
-        
-        # Use November 2025 as in the template
-        current_year = 2025
-        current_month = 11
-        
-        num_days_in_month = calendar.monthrange(current_year, current_month)[1]
-        
-        dates = pd.date_range(
-            start=f'{current_year}-{current_month:02d}-01',
-            periods=num_days_in_month,
-            freq='D'
-        )
-        
-        demand_data = {
-            'Date': dates,
-            'BOPP': [600] * num_days_in_month,
-            'Moulding': [500] * num_days_in_month,
-            'Raffia': [850] * num_days_in_month,
-            'TQPP': [400] * num_days_in_month,
-            'Yarn': [150] * num_days_in_month
-        }
-        demand_df = pd.DataFrame(demand_data)
-        demand_df.to_excel(writer, sheet_name='Demand', index=False)
-        
-        # Transition matrices
-        Plant1_transition = {
-            'From': ['BOPP', 'Moulding', 'Raffia', 'TQPP'],
-            'BOPP': ['Yes', 'No', 'Yes', 'No'],
-            'Moulding': ['No', 'Yes', 'Yes', 'Yes'],
-            'Raffia': ['Yes', 'Yes', 'Yes', 'Yes'],
-            'TQPP': ['No', 'Yes', 'Yes', 'Yes']
-        }
-        plant1_transition_df = pd.DataFrame(Plant1_transition)
-        plant1_transition_df.to_excel(writer, sheet_name='Transition_Plant1', index=False)
-        
-        Plant2_transition = {
-            'From': ['BOPP', 'Moulding', 'Raffia', 'TQPP', 'Yarn'],
-            'BOPP': ['Yes', 'No', 'Yes', 'Yes', 'No'],
-            'Moulding': ['No', 'Yes', 'Yes', 'Yes', 'Yes'],
-            'Raffia': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
-            'TQPP': ['Yes', 'Yes', 'Yes', 'Yes', 'No'],
-            'Yarn': ['No', 'Yes', 'No', 'No', 'Yes']
-        }
-        plant2_transition_df = pd.DataFrame(Plant2_transition)
-        plant2_transition_df.to_excel(writer, sheet_name='Transition_Plant2', index=False)
-        
-        workbook = writer.book
-        
-        for sheet_name in writer.sheets:
-            ws = writer.sheets[sheet_name]
-            
-            if sheet_name == 'Demand':
-                for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):
-                    for cell in row:
-                        cell.number_format = 'DD-MMM-YY'
-            
-            if sheet_name == 'Plant':
-                for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=5, max_col=6):
-                    for cell in row:
-                        if cell.value:
-                            cell.number_format = 'DD-MMM-YY'
-        
-        def autofit_columns(ws):
-            for column in ws.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                
-                if ws.title == 'Demand' and column_letter == 'A':
-                    max_length = 9
-                elif ws.title == 'Plant' and column_letter in ['E', 'F']:
-                    max_length = 9
-                else:
-                    for cell in column:
-                        try:
-                            if cell.value:
-                                if hasattr(cell, 'number_format') and cell.number_format:
-                                    if 'MMM' in cell.number_format or 'mmm' in cell.number_format:
-                                        max_length = max(max_length, 9)
-                                    else:
-                                        max_length = max(max_length, len(str(cell.value)))
-                                else:
-                                    max_length = max(max_length, len(str(cell.value)))
-                        except:
-                            pass
-                
-                adjusted_width = (max_length + 2) * 1.2
-                ws.column_dimensions[column_letter].width = min(adjusted_width, 50)
-        
-        for sheet_name in writer.sheets:
-            ws = writer.sheets[sheet_name]
-            autofit_columns(ws)
-    
-    output.seek(0)
-    return output
+        if sample_path.exists():
+            with open(sample_path, "rb") as f:
+                return io.BytesIO(f.read())
+        else:
+            st.warning("Sample template file not found. Using generated template.")
+            return create_sample_workbook()
+    except Exception as e:
+        st.warning(f"Could not load sample template: {e}. Using generated template.")
+
 
 def process_shutdown_dates(plant_df, dates):
     """Process shutdown dates for each plant"""
@@ -455,7 +342,7 @@ if uploaded_file:
         
         st.markdown('<div class="section-header">🚀 Optimization</div>', unsafe_allow_html=True)
         
-        if st.button("Run Production Optimization", type="primary", use_container_width=True):
+        if st.button("Run Production Optimization", type="primary", width="content"):
             
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -1395,7 +1282,7 @@ else:
     </div>
     """, unsafe_allow_html=True)
     
-    sample_workbook = create_sample_workbook()
+    sample_workbook = get_sample_workbook()
     
     st.markdown("---")
     st.markdown('<div class="section-header">📥 Get Started with Sample Template</div>', unsafe_allow_html=True)
