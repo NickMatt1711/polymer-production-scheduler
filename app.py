@@ -1127,9 +1127,9 @@ if uploaded_file:
                     st.plotly_chart(fig, use_container_width=True)
 
                 st.subheader("Inventory Levels")
-
-                last_actual_day = num_days - buffer_days - 1
                 
+                last_actual_day = num_days - buffer_days - 1
+
                 for grade in sorted_grades:
                     inventory_values = [solver.Value(inventory_vars[(grade, d)]) for d in range(num_days)]
                 
@@ -1155,31 +1155,28 @@ if uploaded_file:
                         hovertemplate="Date: %{x|%d-%b-%y}<br>Inventory: %{y:.0f} MT<extra></extra>"
                     ))
                 
-                    # Add shutdown periods for plants that can produce this grade
-                    grade_shutdown_periods = []
-                    for plant in allowed_lines[grade]:
-                        if plant in shutdown_periods and shutdown_periods[plant]:
-                            # Get the shutdown period for this plant
-                            plant_shutdown_days = shutdown_periods[plant]
-                            if plant_shutdown_days:
-                                start_shutdown = dates[plant_shutdown_days[0]]
-                                end_shutdown = dates[plant_shutdown_days[-1]] + timedelta(days=1)
-                                grade_shutdown_periods.append((start_shutdown, end_shutdown, plant))
-                
-                    # Add shaded rectangles for shutdown periods
-                    for start_shutdown, end_shutdown, plant in grade_shutdown_periods:
-                        fig.add_vrect(
-                            x0=start_shutdown,
-                            x1=end_shutdown,
-                            fillcolor="red",
-                            opacity=0.15,
-                            layer="below",
-                            line_width=0,
-                            annotation_text=f"{plant} SHUTDOWN",
-                            annotation_position="top left",
-                            annotation_font_size=10,
-                            annotation_font_color="red"
-                        )
+                    # Add shutdown periods for plants that produce this grade
+                    shutdown_added = False
+                    for line in allowed_lines[grade]:
+                        if line in shutdown_periods and shutdown_periods[line]:
+                            shutdown_days = shutdown_periods[line]
+                            start_shutdown = dates[shutdown_days[0]]
+                            end_shutdown = dates[shutdown_days[-1]]
+                            
+                            # Add vertical shaded regions for shutdown periods
+                            fig.add_vrect(
+                                x0=start_shutdown,
+                                x1=end_shutdown + timedelta(days=1),
+                                fillcolor="red",
+                                opacity=0.1,
+                                layer="below",
+                                line_width=0,
+                                annotation_text=f"Shutdown: {line}" if not shutdown_added else "",
+                                annotation_position="top left",
+                                annotation_font_size=10,
+                                annotation_font_color="red"
+                            )
+                            shutdown_added = True
                 
                     fig.add_hline(
                         y=min_inventory[grade],
@@ -1230,23 +1227,6 @@ if uploaded_file:
                             bgcolor="white", bordercolor="gray"
                         )
                     ]
-                
-                    # Add legend for shutdown periods if any exist
-                    if grade_shutdown_periods:
-                        shutdown_plants = list(set([plant for _, _, plant in grade_shutdown_periods]))
-                        shutdown_info = f"Shutdown periods: {', '.join(shutdown_plants)}"
-                        fig.add_annotation(
-                            x=0.02,
-                            y=0.98,
-                            xref="paper",
-                            yref="paper",
-                            text=shutdown_info,
-                            showarrow=False,
-                            bgcolor="rgba(255,255,255,0.8)",
-                            bordercolor="red",
-                            borderwidth=1,
-                            font=dict(size=10, color="red")
-                        )
                 
                     fig.update_layout(
                         title=f"Inventory Level - {grade}",
