@@ -1111,7 +1111,7 @@ if uploaded_file:
                             layer="below",
                             line_width=0,
                             annotation_text="Shutdown",
-                            annotation_position = "middle",
+                            annotation_position = "inside",
                             annotation_font_size=14,
                             annotation_font_color="red"
                         )
