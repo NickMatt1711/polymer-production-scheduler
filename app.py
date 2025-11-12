@@ -1110,8 +1110,8 @@ if uploaded_file:
                             opacity=0.2,
                             layer="below",
                             line_width=0,
-                            annotation_text="SHUTDOWN",
-                            annotation_position="top left",
+                            annotation_text="Shutdown",
+                            annotation_position="top centre",
                             annotation_font_size=14,
                             annotation_font_color="red"
                         )
@@ -1207,7 +1207,7 @@ if uploaded_file:
                                 line_width=0,
                                 annotation_text=f"Shutdown: {line}" if not shutdown_added else "",
                                 annotation_position="top left",
-                                annotation_font_size=10,
+                                annotation_font_size=14,
                                 annotation_font_color="red"
                             )
                             shutdown_added = True
