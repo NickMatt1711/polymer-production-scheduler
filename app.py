@@ -1111,6 +1111,8 @@ if uploaded_file:
                             layer="below",
                             line_width=0,
                             annotation_text="Shutdown",
+                            annotation_x=(start_shutdown + end_shutdown) / 2,
+                            annotation_y=0.5,
                             annotation_xanchor = "center",
                             annotation_yanchor = "middle",
                             annotation_font_size=14,
