@@ -1243,7 +1243,6 @@ if uploaded_file:
                             showgrid=True,
                             gridcolor="lightgray"
                         ),
-                        annotations=annotations,
                         plot_bgcolor="white",
                         paper_bgcolor="white",
                         margin=dict(l=60, r=80, t=60, b=60),
@@ -1251,6 +1250,7 @@ if uploaded_file:
                         height=420,
                         showlegend=False
                     )
+                    fig.update_layout(annotations=annotations)
                 
                     st.plotly_chart(fig, use_container_width=True)
 
