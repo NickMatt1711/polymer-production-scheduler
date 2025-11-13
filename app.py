@@ -1090,6 +1090,7 @@ if uploaded_file:
                             <div class="metric-card">
                                 <div class="metric-label">Objective Value</div>
                                 <div class="metric-value">{best_solution['objective']:,.0f}</div>
+                                <div style="font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">↓ Lower is Better</div>
                             </div>
                         """, unsafe_allow_html=True)
                     with col2:
