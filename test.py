@@ -425,7 +425,6 @@ if uploaded_file:
         # Display shutdown periods right after data preview
         st.markdown("---")
         with st.container():
-            st.subheader("🔧 Plant Shutdown Periods")
             shutdown_found = False
             for index, row in plant_df.iterrows():
                 plant = row['Plant']
@@ -441,7 +440,7 @@ if uploaded_file:
                         if start_date > end_date:
                             st.warning(f"⚠️ Invalid shutdown period for {plant}: Start date is after end date")
                         else:
-                            st.info(f"**{plant}**: {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({duration} days)")
+                            st.info(f"**{plant}**: Scheduled for shutdown from {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({duration} days)")
                             shutdown_found = True
                     except Exception as e:
                         st.warning(f"⚠️ Invalid shutdown dates for {plant}: {e}")
@@ -450,7 +449,6 @@ if uploaded_file:
                 st.info("ℹ️ No plant shutdowns scheduled")
             st.markdown('</div>', unsafe_allow_html=True)
         
-        st.markdown("---")
         
         transition_dfs = {}
         for i in range(len(plant_df)):
