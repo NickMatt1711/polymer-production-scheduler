@@ -102,7 +102,7 @@ st.markdown("""
         padding: 1rem;
         border-radius: 12px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
     }
     .section-header {
         font-size: 1.75rem;
