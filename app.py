@@ -315,12 +315,22 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
 
         for line in self.lines:
             last_grade = None
-            for date in self.dates:
-                current_grade = solution['is_producing'][line].get(date)
+            for d in range(self.num_days):  # Use day index instead of date string
+                current_grade = None
+                # Find which grade is producing on this line on this day
+                for grade in self.grades:
+                    key = (grade, line, d)
+                    if key in self.is_producing and self.Value(self.is_producing[key]) == 1:
+                        current_grade = grade
+                        break
+                
+                # Check for transition
                 if current_grade is not None and last_grade is not None:
                     if current_grade != last_grade:
                         transition_count_per_line[line] += 1
                         total_transitions += 1
+                
+                # Update last_grade only if something was produced
                 if current_grade is not None:
                     last_grade = current_grade
 
