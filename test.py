@@ -359,21 +359,10 @@ if uploaded_file:
         uploaded_file.seek(0)
         excel_file = io.BytesIO(uploaded_file.read())
         
-        # Data status badges
-        st.markdown("### 📊 Data Status")
-        status_col1, status_col2, status_col3 = st.columns(3)
-        with status_col1:
-            st.success("✅ Plant Data Loaded")
-        with status_col2:
-            st.success("✅ Inventory Data Loaded")
-        with status_col3:
-            st.success("✅ Demand Data Loaded")
-        
         st.markdown("---")
         
         # Data preview in cards
         with st.container():
-            st.markdown('<div class="section-card">', unsafe_allow_html=True)
             st.markdown("### 📈 Data Preview")
             
             col1, col2, col3 = st.columns(3)
@@ -436,7 +425,6 @@ if uploaded_file:
         # Display shutdown periods right after data preview
         st.markdown("---")
         with st.container():
-            st.markdown('<div class="section-card">', unsafe_allow_html=True)
             st.subheader("🔧 Plant Shutdown Periods")
             shutdown_found = False
             for index, row in plant_df.iterrows():
@@ -491,7 +479,6 @@ if uploaded_file:
                 transition_dfs[plant_name] = None
         
         with st.container():
-            st.markdown('<div class="section-card">', unsafe_allow_html=True)
             st.markdown("### 🚀 Optimization Control")
 
             if st.button("🎯 Run Production Optimization", type="primary", use_container_width=True):
@@ -1048,32 +1035,27 @@ if uploaded_file:
                 if solution_callback.num_solutions() > 0:
                     best_solution = solution_callback.solutions[-1]
 
-                    st.markdown('<div class="section-card">', unsafe_allow_html=True)
                     st.markdown("### 📈 Key Metrics")
                     
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                         st.metric("Objective Value", f"{best_solution['objective']:,.0f}")
                         st.markdown('</div>', unsafe_allow_html=True)
                     with col2:
-                        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                         st.metric("Total Transitions", best_solution['transitions']['total'])
                         st.markdown('</div>', unsafe_allow_html=True)
                     with col3:
                         total_stockouts = sum(sum(best_solution['stockout'][g].values()) for g in grades)
-                        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                         st.metric("Total Stockouts", f"{total_stockouts:,.0f} MT")
                         st.markdown('</div>', unsafe_allow_html=True)
                     with col4:
-                        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                         st.metric("Planning Horizon", f"{num_days} days")
                         st.markdown('</div>', unsafe_allow_html=True)
                     
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     # Use tabs for different result views
-                    tab1, tab2, tab3, tab4 = st.tabs(["📅 Production Schedule", "📊 Summary", "📦 Inventory", "🔧 Plant Details"])
+                    tab1, tab2, tab3 = st.tabs(["📅 Production Schedule", "📊 Summary", "📦 Inventory"])
                     
                     with tab1:
                         st.subheader("Production Schedule by Line")
@@ -1433,10 +1415,6 @@ if uploaded_file:
                         
                             st.plotly_chart(fig, use_container_width=True)
 
-                    with tab4:
-                        st.subheader("Plant Performance Details")
-                        st.info("Plant-specific performance metrics and constraints will be displayed here.")
-                        # You can add plant-specific metrics and details here
 
                 else:
                     st.error("No solutions found during optimization. Please check your constraints and data.")
