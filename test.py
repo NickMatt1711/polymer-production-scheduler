@@ -94,7 +94,7 @@ if 'best_solution' not in st.session_state:
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2.5rem;
+        font-size: 2rem;
         font-weight: 700;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
