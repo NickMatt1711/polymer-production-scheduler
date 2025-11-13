@@ -5,7 +5,6 @@ from datetime import timedelta
 import matplotlib.pyplot as plt
 import numpy as np
 import time
-from tqdm import tqdm
 import io
 from matplotlib import colormaps
 import matplotlib.colors as mcolors
@@ -491,14 +490,12 @@ if uploaded_file:
                 if 'best_solution' not in st.session_state:
                     st.session_state.best_solution = None
 
-                for item in tqdm(items, desc="Processing items"):
-                    time.sleep(0.5)
+                time.sleep(0.5)
                 
                 status_text.markdown('<div class="info-box">🔄 Preprocessing data...</div>', unsafe_allow_html=True)
                 progress_bar.progress(10)
 
-                for item in tqdm(items, desc="Processing items"):
-                    time.sleep(0.5)
+                time.sleep(0.5)
 
                 try:
                     # Process inventory data with grade-plant combinations
@@ -658,8 +655,7 @@ if uploaded_file:
                 progress_bar.progress(30)
                 status_text.markdown('<div class="info-box">🔧 Building optimization model...</div>', unsafe_allow_html=True)
 
-                for item in tqdm(items, desc="Processing items"):
-                    time.sleep(1)
+                time.sleep(1)
                 
                 model = cp_model.CpModel()
                 
