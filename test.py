@@ -99,10 +99,10 @@ st.markdown("""
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         text-align: center;
-        padding: 1.5rem;
+        padding: 1rem;
         border-radius: 12px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
     }
     .section-header {
         font-size: 1.75rem;
