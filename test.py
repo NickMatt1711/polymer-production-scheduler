@@ -355,21 +355,7 @@ with st.sidebar:
 
 if uploaded_file:
     try:
-        # Add process steps indicator
-        st.markdown("### 📋 Process Steps")
-        steps = ["Data Upload", "Parameter Setup", "Optimization", "Results"]
-        current_step = 1  # Start at parameter setup since file is uploaded
-        
-        cols = st.columns(len(steps))
-        for i, step in enumerate(steps):
-            with cols[i]:
-                if i < current_step:
-                    st.success(f"✅ {step}")
-                elif i == current_step:
-                    st.info(f"🔄 {step}")
-                else:
-                    st.write(f"⏳ {step}")
-        
+                
         uploaded_file.seek(0)
         excel_file = io.BytesIO(uploaded_file.read())
         
@@ -507,9 +493,7 @@ if uploaded_file:
         with st.container():
             st.markdown('<div class="section-card">', unsafe_allow_html=True)
             st.markdown("### 🚀 Optimization Control")
-            
-            col1, col2, col3 = st.columns([2,1,1])
-            with col1:
+
                 if st.button("🎯 Run Production Optimization", type="primary", use_container_width=True):
                     # Update process steps
                     st.session_state.current_step = 2  # Optimization running
@@ -1472,13 +1456,6 @@ if uploaded_file:
                         - Adjust shutdown periods
                         """)
             
-            with col2:
-                if st.button("🔄 Reset", use_container_width=True):
-                    st.session_state.clear()
-                    st.rerun()
-            
-            with col3:
-                st.button("📋 Help", use_container_width=True)
             
             st.markdown('</div>', unsafe_allow_html=True)
     
