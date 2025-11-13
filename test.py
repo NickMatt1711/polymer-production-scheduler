@@ -1447,23 +1447,21 @@ if uploaded_file:
 else:
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.markdown("""
-    <h3>🎉 Welcome to the Polymer Production Scheduler! 🏭</h3>
-    <p>This application helps optimize your polymer production schedule by:</p>
-    
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;">
         <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
-            <strong>📊 Data Analysis</strong>
+            <strong>📊 Input Data Analysis</strong>
             <ul style="margin: 0.5rem 0;">
                 <li>Plant capacities & constraints</li>
                 <li>Inventory management</li>
                 <li>Demand forecasting</li>
+                <li>Transition Matrix</li>
             </ul>
         </div>
         <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
             <strong>⚡ Optimization</strong>
             <ul style="margin: 0.5rem 0;">
                 <li>Minimize transitions</li>
-                <li>Balance inventory levels</li>
+                <li>Reduce Stockouts</li>
                 <li>Meet customer demand</li>
             </ul>
         </div>
