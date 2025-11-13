@@ -1027,7 +1027,7 @@ if uploaded_file:
                                     model.Add(trans_var == 0).OnlyEnforceIf(is_producing[(grade1, line, d)].Not())
                                     model.Add(trans_var == 0).OnlyEnforceIf(is_producing[(grade2, line, d + 1)].Not())
                                     transition_vars.append(trans_var)
-                                    objective += transition_penalty * trans_var)
+                                    objective += transition_penalty * trans_var  # FIXED: Removed extra parenthesis
 
                             for grade in grades:
                                 if line in allowed_lines[grade]:
