@@ -94,15 +94,15 @@ if 'best_solution' not in st.session_state:
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2.5rem;
+        font-size: 2.1rem;
         font-weight: 700;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         text-align: center;
-        padding: 1.5rem;
+        padding: 1rem;
         border-radius: 12px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
     }
     .section-header {
         font-size: 1.75rem;
@@ -140,10 +140,28 @@ st.markdown("""
     .metric-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 1rem;
-        border-radius: 8px;
+        padding: 1.5rem;
+        border-radius: 12px;
         text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+        text-align: center;
+    }
+    .metric-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-align: center;
     }
     .stProgress > div > div > div > div {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -173,6 +191,39 @@ st.markdown("""
         border-radius: 8px !important;
         padding: 1rem !important;
         background-color: #f8fff9 !important;
+    }
+    /* Equal width tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #f8f9fa;
+        padding: 0.5rem;
+        border-radius: 10px;
+        display: flex;
+        justify-content: space-between;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        padding: 0 24px;
+        background-color: white;
+        border-radius: 8px;
+        font-weight: 600;
+        border: 2px solid transparent;
+        flex: 1;  /* This makes each tab take equal space */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: #667eea;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #f0f0f0;
+    }
+    .stTabs [aria-selected="true"]:hover {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -344,7 +395,11 @@ if uploaded_file:
         
         # Data preview in cards
         with st.container():
-            st.markdown("### 📈 Data Preview")
+            st.markdown("""
+                <div class="section-header" style="text-align: center; margin-top: 2rem;">
+                    📈 Data Preview & Validation
+                </div>
+            """, unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
             
@@ -1018,21 +1073,37 @@ if uploaded_file:
                     best_solution = solution_callback.solutions[-1]
 
                     st.markdown("### 📈 Key Metrics")
-                    
+                
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Objective Value", f"{best_solution['objective']:,.0f}")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Objective Value</div>
+                                <div class="metric-value">{best_solution['objective']:,.0f}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
                     with col2:
-                        st.metric("Total Transitions", best_solution['transitions']['total'])
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Total Transitions</div>
+                                <div class="metric-value">{best_solution['transitions']['total']}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
                     with col3:
                         total_stockouts = sum(sum(best_solution['stockout'][g].values()) for g in grades)
-                        st.metric("Total Stockouts", f"{total_stockouts:,.0f} MT")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Total Stockouts</div>
+                                <div class="metric-value">{total_stockouts:,.0f} MT</div>
+                            </div>
+                        """, unsafe_allow_html=True)
                     with col4:
-                        st.metric("Planning Horizon", f"{num_days} days")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Planning Horizon</div>
+                                <div class="metric-value">{num_days} days</div>
+                            </div>
+                        """, unsafe_allow_html=True)
                     
                     st.markdown('</div>', unsafe_allow_html=True)
                     
@@ -1424,23 +1495,21 @@ if uploaded_file:
 else:
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.markdown("""
-    <h3>🎉 Welcome to the Polymer Production Scheduler! 🏭</h3>
-    <p>This application helps optimize your polymer production schedule by:</p>
-    
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;">
         <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
-            <strong>📊 Data Analysis</strong>
+            <strong>📊 Input Data Analysis</strong>
             <ul style="margin: 0.5rem 0;">
                 <li>Plant capacities & constraints</li>
                 <li>Inventory management</li>
                 <li>Demand forecasting</li>
+                <li>Transition Matrix</li>
             </ul>
         </div>
         <div style="padding: 1rem; background: #f8f9fa; border-radius: 8px;">
             <strong>⚡ Optimization</strong>
             <ul style="margin: 0.5rem 0;">
                 <li>Minimize transitions</li>
-                <li>Balance inventory levels</li>
+                <li>Reduce Stockouts</li>
                 <li>Meet customer demand</li>
             </ul>
         </div>
