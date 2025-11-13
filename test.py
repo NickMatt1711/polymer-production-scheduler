@@ -174,16 +174,32 @@ st.markdown("""
         padding: 1rem !important;
         background-color: #f8fff9 !important;
     }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #f8f9fa;
+        padding: 0.5rem;
+        border-radius: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        padding: 0 24px;
+        background-color: white;
+        border-radius: 8px;
+        font-weight: 600;
+        border: 2px solid transparent;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: #667eea;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
 <div class="main-header">
-    <div style="font-size: 3rem; margin-bottom: 0.5rem;">🏭</div>
-    <div style="font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem;">Polymer Production Scheduler</div>
-    <div style="font-size: 1.1rem; opacity: 0.85; font-weight: 400; letter-spacing: 0.5px;">
-        Multi-Plant Optimization with Shutdown Management
-    </div>
+    🏭 Polymer Production Scheduler<br>
+    <small style="font-size: 1rem; opacity: 0.9;">Multi-Plant Optimization with Shutdown Management</small>
 </div>
 """, unsafe_allow_html=True)
 
@@ -285,28 +301,12 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
         return len(self.solutions)
 
 with st.sidebar:
-    st.markdown("""
-        <div style="text-align: center; padding: 1rem 0; margin-bottom: 1.5rem; 
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    border-radius: 10px; color: white;">
-            <div style="font-size: 1.5rem; font-weight: 600;">⚙️ Control Panel</div>
-        </div>
-    """, unsafe_allow_html=True)
     st.markdown("### 📁 Data Input")
     
-    st.markdown("""
-            <div style="padding: 0.5rem; background: #f8f9fa; border-radius: 8px; margin-bottom: 1rem;">
-                <p style="margin: 0; font-size: 0.9rem; color: #666;">
-                    📤 Upload your Excel file with Plant, Inventory, and Demand sheets
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
-        
     uploaded_file = st.file_uploader(
-        "Choose Excel File", 
+        "Upload Excel File", 
         type=["xlsx"],
-        help="Upload an Excel file with Plant, Inventory, and Demand sheets",
-        label_visibility="collapsed"
+        help="Upload an Excel file with Plant, Inventory, and Demand sheets"
     )
     
     if uploaded_file:
@@ -483,11 +483,6 @@ if uploaded_file:
             if st.button("🎯 Run Production Optimization", type="primary", use_container_width=True):
                 # Update process steps
                 st.session_state.current_step = 2  # Optimization running
-
-                st.markdown("""
-                    <div style="background: white; padding: 2rem; border-radius: 12px; 
-                                box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin: 2rem 0;">
-                """, unsafe_allow_html=True)
                 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
