@@ -174,11 +174,14 @@ st.markdown("""
         padding: 1rem !important;
         background-color: #f8fff9 !important;
     }
+    /* Equal width tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #f8f9fa;
         padding: 0.5rem;
         border-radius: 10px;
+        display: flex;
+        justify-content: space-between;
     }
     .stTabs [data-baseweb="tab"] {
         height: 50px;
@@ -187,11 +190,22 @@ st.markdown("""
         border-radius: 8px;
         font-weight: 600;
         border: 2px solid transparent;
+        flex: 1;  /* This makes each tab take equal space */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border-color: #667eea;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #f0f0f0;
+    }
+    .stTabs [aria-selected="true"]:hover {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
 </style>
 """, unsafe_allow_html=True)
