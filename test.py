@@ -438,13 +438,12 @@ def solve_problem(data: ProblemData, time_limit_seconds: float = 60.0) -> Dict[s
             obj = None
 
     status = {
-        cp_model.OPTIMAL: "OPTIMAL",
-        cp_model.FEASIBLE: "FEASIBLE",
-        cp_model.UNKNOWN: "UNKNOWN",
-        cp_model.INFEASIBLE: "INFEASIBLE",
-        cp_model.MODEL_INVALID: "MODEL_INVALID",
-        cp_model.NOT_SOLVED: "NOT_SOLVED"
-    }.get(result, f"STATUS_{result}")
+    cp_model.OPTIMAL: "OPTIMAL",
+    cp_model.FEASIBLE: "FEASIBLE",
+    cp_model.UNKNOWN: "UNKNOWN",
+    cp_model.INFEASIBLE: "INFEASIBLE",
+    cp_model.MODEL_INVALID: "MODEL_INVALID"
+}.get(result, f"STATUS_{result}")
 
     return {
         'status': status,
