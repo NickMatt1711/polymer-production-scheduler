@@ -293,25 +293,6 @@ with st.sidebar:
     if uploaded_file:
         st.success("✅ File uploaded successfully!")
         
-        # Quick stats in sidebar
-        st.markdown("---")
-        st.markdown("### 📊 Quick Stats")
-        try:
-            excel_file = io.BytesIO(uploaded_file.read())
-            plant_df = pd.read_excel(excel_file, sheet_name='Plant')
-            excel_file.seek(0)
-            demand_df = pd.read_excel(excel_file, sheet_name='Demand')
-            grades = [col for col in demand_df.columns if col != demand_df.columns[0]]
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Plants", len(plant_df))
-            with col2:
-                st.metric("Grades", len(grades))
-        except:
-            pass
-          
-        st.markdown("---")
         st.markdown("### ⚙️ Optimization Parameters")
         
         with st.expander("🔧 Basic Parameters", expanded=True):
