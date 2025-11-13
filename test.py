@@ -1040,115 +1040,6 @@ if uploaded_file:
                     tab1, tab2, tab3 = st.tabs(["📅 Production Schedule", "📊 Summary", "📦 Inventory"])
                     
                     with tab1:
-                        st.subheader("Production Schedule by Line")
-                        
-                        cmap = colormaps.get_cmap('tab20')
-                        grade_colors = {}
-                        for idx, grade in enumerate(grades):
-                            grade_colors[grade] = cmap(idx % 20)
-                        
-                        production_totals = {}
-                        grade_totals = {}
-                        plant_totals = {line: 0 for line in lines}
-                        stockout_totals = {}
-                        
-                        for grade in grades:
-                            production_totals[grade] = {}
-                            grade_totals[grade] = 0
-                            stockout_totals[grade] = 0
-                            
-                            for line in lines:
-                                total_prod = 0
-                                for d in range(num_days):
-                                    key = (grade, line, d)
-                                    if key in production:
-                                        total_prod += solver.Value(production[key])
-                                production_totals[grade][line] = total_prod
-                                grade_totals[grade] += total_prod
-                                plant_totals[line] += total_prod
-                            
-                            # Calculate total stockout for this grade
-                            for d in range(num_days):
-                                key = (grade, d)
-                                if key in stockout_vars:
-                                    stockout_totals[grade] += solver.Value(stockout_vars[key])
-                        
-                        total_prod_data = []
-                        for grade in grades:
-                            row = {'Grade': grade}
-                            for line in lines:
-                                row[line] = production_totals[grade][line]
-                            row['Total Produced'] = grade_totals[grade]
-                            row['Total Stockout'] = stockout_totals[grade]
-                            total_prod_data.append(row)
-                        
-                        totals_row = {'Grade': 'Total'}
-                        for line in lines:
-                            totals_row[line] = plant_totals[line]
-                        totals_row['Total Produced'] = sum(plant_totals.values())
-                        totals_row['Total Stockout'] = sum(stockout_totals.values())
-                        total_prod_data.append(totals_row)
-                        
-                        total_prod_df = pd.DataFrame(total_prod_data)
-                        
-                        sorted_grades = sorted(grades)
-                        base_colors = px.colors.qualitative.Vivid
-                        grade_color_map = {grade: base_colors[i % len(base_colors)] for i, grade in enumerate(sorted_grades)}
-                        
-                        for line in lines:
-                            st.markdown(f"### 🏭 {line}")
-                        
-                            schedule_data = []
-                            current_grade = None
-                            start_day = None
-                        
-                            for d in range(num_days):
-                                date = dates[d]
-                                grade_today = None
-                        
-                                for grade in sorted_grades:
-                                    if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
-                                        grade_today = grade
-                                        break
-                        
-                                if grade_today != current_grade:
-                                    if current_grade is not None:
-                                        end_date = dates[d - 1]
-                                        duration = (end_date - start_day).days + 1
-                                        schedule_data.append({
-                                            "Grade": current_grade,
-                                            "Start Date": start_day.strftime("%d-%b-%y"),
-                                            "End Date": end_date.strftime("%d-%b-%y"),
-                                            "Days": duration
-                                        })
-                                    current_grade = grade_today
-                                    start_day = date
-                        
-                            if current_grade is not None:
-                                end_date = dates[num_days - 1]
-                                duration = (end_date - start_day).days + 1
-                                schedule_data.append({
-                                    "Grade": current_grade,
-                                    "Start Date": start_day.strftime("%d-%b-%y"),
-                                    "End Date": end_date.strftime("%d-%b-%y"),
-                                    "Days": duration
-                                })
-                        
-                            if not schedule_data:
-                                st.info(f"No production data available for {line}.")
-                                continue
-                        
-                            schedule_df = pd.DataFrame(schedule_data)
-                        
-                            def color_grade(val):
-                                if val in grade_color_map:
-                                    color = grade_color_map[val]
-                                    return f'background-color: {color}; color: white; font-weight: bold; text-align: center;'
-                                return ''
-                        
-                            styled_df = schedule_df.style.applymap(color_grade, subset=['Grade'])
-                            st.dataframe(styled_df, use_container_width=True)
-
                         st.subheader("Production Visualization")
                         
                         for line in lines:
@@ -1246,6 +1137,115 @@ if uploaded_file:
                             )
                         
                             st.plotly_chart(fig, use_container_width=True)
+
+                        st.subheader("Production Schedule by Line")
+                            
+                            cmap = colormaps.get_cmap('tab20')
+                            grade_colors = {}
+                            for idx, grade in enumerate(grades):
+                                grade_colors[grade] = cmap(idx % 20)
+                            
+                            production_totals = {}
+                            grade_totals = {}
+                            plant_totals = {line: 0 for line in lines}
+                            stockout_totals = {}
+                            
+                            for grade in grades:
+                                production_totals[grade] = {}
+                                grade_totals[grade] = 0
+                                stockout_totals[grade] = 0
+                                
+                                for line in lines:
+                                    total_prod = 0
+                                    for d in range(num_days):
+                                        key = (grade, line, d)
+                                        if key in production:
+                                            total_prod += solver.Value(production[key])
+                                    production_totals[grade][line] = total_prod
+                                    grade_totals[grade] += total_prod
+                                    plant_totals[line] += total_prod
+                                
+                                # Calculate total stockout for this grade
+                                for d in range(num_days):
+                                    key = (grade, d)
+                                    if key in stockout_vars:
+                                        stockout_totals[grade] += solver.Value(stockout_vars[key])
+                            
+                            total_prod_data = []
+                            for grade in grades:
+                                row = {'Grade': grade}
+                                for line in lines:
+                                    row[line] = production_totals[grade][line]
+                                row['Total Produced'] = grade_totals[grade]
+                                row['Total Stockout'] = stockout_totals[grade]
+                                total_prod_data.append(row)
+                            
+                            totals_row = {'Grade': 'Total'}
+                            for line in lines:
+                                totals_row[line] = plant_totals[line]
+                            totals_row['Total Produced'] = sum(plant_totals.values())
+                            totals_row['Total Stockout'] = sum(stockout_totals.values())
+                            total_prod_data.append(totals_row)
+                            
+                            total_prod_df = pd.DataFrame(total_prod_data)
+                            
+                            sorted_grades = sorted(grades)
+                            base_colors = px.colors.qualitative.Vivid
+                            grade_color_map = {grade: base_colors[i % len(base_colors)] for i, grade in enumerate(sorted_grades)}
+                            
+                            for line in lines:
+                                st.markdown(f"### 🏭 {line}")
+                            
+                                schedule_data = []
+                                current_grade = None
+                                start_day = None
+                            
+                                for d in range(num_days):
+                                    date = dates[d]
+                                    grade_today = None
+                            
+                                    for grade in sorted_grades:
+                                        if (grade, line, d) in is_producing and solver.Value(is_producing[(grade, line, d)]) == 1:
+                                            grade_today = grade
+                                            break
+                            
+                                    if grade_today != current_grade:
+                                        if current_grade is not None:
+                                            end_date = dates[d - 1]
+                                            duration = (end_date - start_day).days + 1
+                                            schedule_data.append({
+                                                "Grade": current_grade,
+                                                "Start Date": start_day.strftime("%d-%b-%y"),
+                                                "End Date": end_date.strftime("%d-%b-%y"),
+                                                "Days": duration
+                                            })
+                                        current_grade = grade_today
+                                        start_day = date
+                            
+                                if current_grade is not None:
+                                    end_date = dates[num_days - 1]
+                                    duration = (end_date - start_day).days + 1
+                                    schedule_data.append({
+                                        "Grade": current_grade,
+                                        "Start Date": start_day.strftime("%d-%b-%y"),
+                                        "End Date": end_date.strftime("%d-%b-%y"),
+                                        "Days": duration
+                                    })
+                            
+                                if not schedule_data:
+                                    st.info(f"No production data available for {line}.")
+                                    continue
+                            
+                                schedule_df = pd.DataFrame(schedule_data)
+                            
+                                def color_grade(val):
+                                    if val in grade_color_map:
+                                        color = grade_color_map[val]
+                                        return f'background-color: {color}; color: white; font-weight: bold; text-align: center;'
+                                    return ''
+                            
+                                styled_df = schedule_df.style.applymap(color_grade, subset=['Grade'])
+                                st.dataframe(styled_df, use_container_width=True)
 
                     with tab2:
                         st.subheader("Production Summary")
