@@ -525,12 +525,12 @@ if uploaded_file:
                 if 'best_solution' not in st.session_state:
                     st.session_state.best_solution = None
 
-                time.sleep(0.5)
+                time.sleep(1)
                 
                 status_text.markdown('<div class="info-box">🔄 Preprocessing data...</div>', unsafe_allow_html=True)
                 progress_bar.progress(10)
 
-                time.sleep(0.5)
+                time.sleep(2)
 
                 try:
                     # Process inventory data with grade-plant combinations
@@ -690,7 +690,7 @@ if uploaded_file:
                 progress_bar.progress(30)
                 status_text.markdown('<div class="info-box">🔧 Building optimization model...</div>', unsafe_allow_html=True)
 
-                time.sleep(1)
+                time.sleep(2)
                 
                 model = cp_model.CpModel()
                 
