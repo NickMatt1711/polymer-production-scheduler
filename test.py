@@ -140,10 +140,28 @@ st.markdown("""
     .metric-card {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 1rem;
-        border-radius: 8px;
+        padding: 1.5rem;
+        border-radius: 12px;
         text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+        text-align: center;
+    }
+    .metric-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-align: center;
     }
     .stProgress > div > div > div > div {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -1055,21 +1073,37 @@ if uploaded_file:
                     best_solution = solution_callback.solutions[-1]
 
                     st.markdown("### 📈 Key Metrics")
-                    
+                
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Objective Value", f"{best_solution['objective']:,.0f}")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Objective Value</div>
+                                <div class="metric-value">{best_solution['objective']:,.0f}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
                     with col2:
-                        st.metric("Total Transitions", best_solution['transitions']['total'])
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Total Transitions</div>
+                                <div class="metric-value">{best_solution['transitions']['total']}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
                     with col3:
                         total_stockouts = sum(sum(best_solution['stockout'][g].values()) for g in grades)
-                        st.metric("Total Stockouts", f"{total_stockouts:,.0f} MT")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Total Stockouts</div>
+                                <div class="metric-value">{total_stockouts:,.0f} MT</div>
+                            </div>
+                        """, unsafe_allow_html=True)
                     with col4:
-                        st.metric("Planning Horizon", f"{num_days} days")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Planning Horizon</div>
+                                <div class="metric-value">{num_days} days</div>
+                            </div>
+                        """, unsafe_allow_html=True)
                     
                     st.markdown('</div>', unsafe_allow_html=True)
                     
