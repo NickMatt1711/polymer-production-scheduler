@@ -1139,9 +1139,8 @@ if uploaded_file:
                             st.plotly_chart(fig, use_container_width=True)
 
                         st.subheader("Production Schedule by Line")
-                            
-                            cmap = colormaps.get_cmap('tab20')
-                            grade_colors = {}
+                        cmap = colormaps.get_cmap('tab20')
+                        grade_colors = {}
                             for idx, grade in enumerate(grades):
                                 grade_colors[grade] = cmap(idx % 20)
                             
