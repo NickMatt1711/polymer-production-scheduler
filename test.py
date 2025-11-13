@@ -447,8 +447,6 @@ if uploaded_file:
             
             if not shutdown_found:
                 st.info("ℹ️ No plant shutdowns scheduled")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
         
         transition_dfs = {}
         for i in range(len(plant_df)):
