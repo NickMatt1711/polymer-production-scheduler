@@ -315,12 +315,22 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
 
         for line in self.lines:
             last_grade = None
-            for date in self.dates:
-                current_grade = solution['is_producing'][line].get(date)
+            for d in range(self.num_days):  # Use day index instead of date string
+                current_grade = None
+                # Find which grade is producing on this line on this day
+                for grade in self.grades:
+                    key = (grade, line, d)
+                    if key in self.is_producing and self.Value(self.is_producing[key]) == 1:
+                        current_grade = grade
+                        break
+                
+                # Check for transition
                 if current_grade is not None and last_grade is not None:
                     if current_grade != last_grade:
                         transition_count_per_line[line] += 1
                         total_transitions += 1
+                
+                # Update last_grade only if something was produced
                 if current_grade is not None:
                     last_grade = current_grade
 
@@ -525,12 +535,12 @@ if uploaded_file:
                 if 'best_solution' not in st.session_state:
                     st.session_state.best_solution = None
 
-                time.sleep(0.5)
+                time.sleep(1)
                 
                 status_text.markdown('<div class="info-box">🔄 Preprocessing data...</div>', unsafe_allow_html=True)
                 progress_bar.progress(10)
 
-                time.sleep(0.5)
+                time.sleep(2)
 
                 try:
                     # Process inventory data with grade-plant combinations
@@ -690,7 +700,7 @@ if uploaded_file:
                 progress_bar.progress(30)
                 status_text.markdown('<div class="info-box">🔧 Building optimization model...</div>', unsafe_allow_html=True)
 
-                time.sleep(1)
+                time.sleep(2)
                 
                 model = cp_model.CpModel()
                 
@@ -1080,6 +1090,7 @@ if uploaded_file:
                             <div class="metric-card">
                                 <div class="metric-label">Objective Value</div>
                                 <div class="metric-value">{best_solution['objective']:,.0f}</div>
+                                <div style="font-size: 0.75rem; opacity: 0.8; margin-top: 0.25rem;">↓ Lower is Better</div>
                             </div>
                         """, unsafe_allow_html=True)
                     with col2:
