@@ -18,6 +18,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
 
+# Constants
+MAX_INVENTORY_BOUND = 1000000
+MAX_STOCKOUT_BOUND = 100000
+DEFAULT_MIN_RUN_DAYS = 1
+DEFAULT_MAX_RUN_DAYS = 9999
+
 def get_sample_workbook():
     """Retrieve the sample workbook from the same directory as app.py"""
     try:
@@ -33,6 +39,7 @@ def get_sample_workbook():
             return create_sample_workbook()
     except Exception as e:
         st.warning(f"Could not load sample template: {e}. Using generated template.")
+        return None
 
 def process_shutdown_dates(plant_df, dates):
     """Process shutdown dates for each plant"""
@@ -75,6 +82,45 @@ def process_shutdown_dates(plant_df, dates):
             shutdown_periods[plant] = []
     
     return shutdown_periods
+
+def load_transition_matrices(excel_file, plant_df):
+    """Load transition matrices for all plants"""
+    transition_dfs = {}
+    for i in range(len(plant_df)):
+        plant_name = plant_df['Plant'].iloc[i]
+        
+        possible_sheet_names = [
+            f'Transition_{plant_name}',
+            f'Transition_{plant_name.replace(" ", "_")}',
+            f'Transition{plant_name.replace(" ", "")}',
+        ]
+        
+        transition_df_found = None
+        for sheet_name in possible_sheet_names:
+            try:
+                excel_file.seek(0)
+                transition_df_found = pd.read_excel(excel_file, sheet_name=sheet_name, index_col=0)
+                st.info(f"✅ Loaded transition matrix for {plant_name} from sheet '{sheet_name}'")
+                break
+            except:
+                continue
+        
+        if transition_df_found is not None:
+            transition_dfs[plant_name] = transition_df_found
+        else:
+            st.info(f"ℹ️ No transition matrix found for {plant_name}. Assuming no transition constraints.")
+            transition_dfs[plant_name] = None
+    
+    return transition_dfs
+
+def parse_rerun_allowed(value):
+    """Parse rerun allowed value with robust handling"""
+    if pd.notna(value):
+        val_str = str(value).strip().lower()
+        if val_str in ['no', 'n', 'false', '0']:
+            return False
+        return True
+    return True
 
 st.set_page_config(
     page_title="Polymer Production Scheduler",
@@ -166,7 +212,6 @@ st.markdown("""
     .stProgress > div > div > div > div {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
-    /* Improved buttons */
     .stButton>button {
         border-radius: 8px;
         border: none;
@@ -180,19 +225,16 @@ st.markdown("""
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
-    /* Better dataframes */
     .dataframe {
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    /* File uploader enhancement */
     .uploadedFile {
         border: 2px dashed #28a745 !important;
         border-radius: 8px !important;
         padding: 1rem !important;
         background-color: #f8fff9 !important;
     }
-    /* Equal width tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background-color: #f8f9fa;
@@ -308,9 +350,7 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
                         solution['is_producing'][line][date_key] = grade
                         break
 
-        self.solutions.append(solution)
-
-        # FIXED: Consistent transition counting using day indices
+        # Transition counting
         transition_count_per_line = {line: 0 for line in self.lines}
         total_transitions = 0
 
@@ -319,20 +359,17 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
             
             for d in range(self.num_days):
                 current_grade = None
-                # Find which grade is producing (use consistent indexing)
                 for grade in self.grades:
                     key = (grade, line, d)
                     if key in self.is_producing and self.Value(self.is_producing[key]) == 1:
                         current_grade = grade
                         break
                 
-                # Only count transitions on consecutive production days
                 if current_grade is not None:
                     if last_grade is not None and current_grade != last_grade:
                         transition_count_per_line[line] += 1
                         total_transitions += 1
                     last_grade = current_grade
-                # Note: Don't reset last_grade if no production - this is correct for shutdown handling
 
         solution['transitions'] = {
             'per_line': transition_count_per_line,
@@ -397,7 +434,6 @@ with st.sidebar:
 
 if uploaded_file:
     try:
-                
         uploaded_file.seek(0)
         excel_file = io.BytesIO(uploaded_file.read())
         
@@ -439,7 +475,7 @@ if uploaded_file:
                     force_start_column = inventory_display_df.columns[7]
                     
                     if pd.api.types.is_datetime64_any_dtype(inventory_display_df[force_start_column]):
-                        inventory_display_df[force_start_column] = inventory_display_df[start_column].dt.strftime('%d-%b-%y')
+                        inventory_display_df[force_start_column] = inventory_display_df[force_start_column].dt.strftime('%d-%b-%y')
                     
                     st.subheader("📦 Inventory Data")
                     st.dataframe(inventory_display_df, use_container_width=True)
@@ -468,7 +504,7 @@ if uploaded_file:
         
         excel_file.seek(0)
         
-        # Display shutdown periods right after data preview
+        # Display shutdown periods
         st.markdown("---")
         with st.container():
             shutdown_found = False
@@ -494,37 +530,13 @@ if uploaded_file:
             if not shutdown_found:
                 st.info("ℹ️ No plant shutdowns scheduled")
         
-        transition_dfs = {}
-        for i in range(len(plant_df)):
-            plant_name = plant_df['Plant'].iloc[i]
-            
-            possible_sheet_names = [
-                f'Transition_{plant_name}',
-                f'Transition_{plant_name.replace(" ", "_")}',
-                f'Transition{plant_name.replace(" ", "")}',
-            ]
-            
-            transition_df_found = None
-            for sheet_name in possible_sheet_names:
-                try:
-                    excel_file.seek(0)
-                    transition_df_found = pd.read_excel(excel_file, sheet_name=sheet_name, index_col=0)
-                    st.info(f"✅ Loaded transition matrix for {plant_name} from sheet '{sheet_name}'")
-                    break
-                except:
-                    continue
-            
-            if transition_df_found is not None:
-                transition_dfs[plant_name] = transition_df_found
-            else:
-                st.info(f"ℹ️ No transition matrix found for {plant_name}. Assuming no transition constraints.")
-                transition_dfs[plant_name] = None
+        # Load transition matrices
+        transition_dfs = load_transition_matrices(excel_file, plant_df)
         
         st.markdown("---")
         with st.container():
             if st.button("🎯 Run Production Optimization", type="primary", use_container_width=True):
-                # Update process steps
-                st.session_state.current_step = 2  # Optimization running
+                st.session_state.current_step = 2
                 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -543,28 +555,33 @@ if uploaded_file:
                 time.sleep(2)
 
                 try:
-                    # Process inventory data with grade-plant combinations
+                    # Process plant data
                     num_lines = len(plant_df)
                     lines = list(plant_df['Plant'])
-                    capacities = {row['Plant']: row['Capacity per day'] for index, row in plant_df.iterrows()}
+                    capacities = {row['Plant']: int(row['Capacity per day']) for index, row in plant_df.iterrows()}
                     
-                    # Get unique grades from demand sheet
+                    # Validate capacities
+                    for plant, cap in capacities.items():
+                        if cap <= 0:
+                            st.error(f"Invalid capacity for {plant}: {cap}. Must be positive.")
+                            st.stop()
+                    
+                    # Get unique grades
                     grades = [col for col in demand_df.columns if col != demand_df.columns[0]]
                     
-                    # Store inventory parameters per (grade, plant) combination
-                    initial_inventory = {}  # Global per grade
-                    min_inventory = {}  # Global per grade
-                    max_inventory = {}  # Global per grade
-                    min_closing_inventory = {}  # Global per grade
-                    min_run_days = {}  # Per (grade, plant)
-                    max_run_days = {}  # Per (grade, plant)
-                    force_start_date = {}  # Per (grade, plant)
-                    allowed_lines = {grade: [] for grade in grades}  # List of lines per grade
-                    rerun_allowed = {}  # Per (grade, plant)
-                    
-                    # Track which grades have global inventory settings defined
+                    # Initialize data structures
+                    initial_inventory = {}
+                    min_inventory = {}
+                    max_inventory = {}
+                    min_closing_inventory = {}
+                    min_run_days = {}
+                    max_run_days = {}
+                    force_start_date = {}
+                    allowed_lines = {grade: [] for grade in grades}
+                    rerun_allowed = {}
                     grade_inventory_defined = set()
                     
+                    # Process inventory data
                     for index, row in inventory_df.iterrows():
                         grade = row['Grade Name']
                         
@@ -576,52 +593,25 @@ if uploaded_file:
                             plants_for_row = lines
                             st.warning(f"⚠️ Lines for grade '{grade}' (row {index}) are not specified, allowing all lines")
                         
-                        # Add plants to allowed_lines for this grade
                         for plant in plants_for_row:
                             if plant not in allowed_lines[grade]:
                                 allowed_lines[grade].append(plant)
                         
                         # Global inventory parameters (only set once per grade)
                         if grade not in grade_inventory_defined:
-                            if pd.notna(row['Opening Inventory']):
-                                initial_inventory[grade] = row['Opening Inventory']
-                            else:
-                                initial_inventory[grade] = 0
-                            
-                            if pd.notna(row['Min. Inventory']):
-                                min_inventory[grade] = row['Min. Inventory']
-                            else:
-                                min_inventory[grade] = 0
-                            
-                            if pd.notna(row['Max. Inventory']):
-                                max_inventory[grade] = row['Max. Inventory']
-                            else:
-                                max_inventory[grade] = 1000000000
-                            
-                            if pd.notna(row['Min. Closing Inventory']):
-                                min_closing_inventory[grade] = row['Min. Closing Inventory']
-                            else:
-                                min_closing_inventory[grade] = 0
-                            
+                            initial_inventory[grade] = int(row['Opening Inventory']) if pd.notna(row['Opening Inventory']) else 0
+                            min_inventory[grade] = int(row['Min. Inventory']) if pd.notna(row['Min. Inventory']) else 0
+                            max_inventory[grade] = int(row['Max. Inventory']) if pd.notna(row['Max. Inventory']) else MAX_INVENTORY_BOUND
+                            min_closing_inventory[grade] = int(row['Min. Closing Inventory']) if pd.notna(row['Min. Closing Inventory']) else 0
                             grade_inventory_defined.add(grade)
                         
                         # Plant-specific parameters
                         for plant in plants_for_row:
                             grade_plant_key = (grade, plant)
                             
-                            # Min Run Days
-                            if pd.notna(row['Min. Run Days']):
-                                min_run_days[grade_plant_key] = int(row['Min. Run Days'])
-                            else:
-                                min_run_days[grade_plant_key] = 1
+                            min_run_days[grade_plant_key] = int(row['Min. Run Days']) if pd.notna(row['Min. Run Days']) else DEFAULT_MIN_RUN_DAYS
+                            max_run_days[grade_plant_key] = int(row['Max. Run Days']) if pd.notna(row['Max. Run Days']) else DEFAULT_MAX_RUN_DAYS
                             
-                            # Max Run Days
-                            if pd.notna(row['Max. Run Days']):
-                                max_run_days[grade_plant_key] = int(row['Max. Run Days'])
-                            else:
-                                max_run_days[grade_plant_key] = 9999
-                            
-                            # Force Start Date
                             if pd.notna(row['Force Start Date']):
                                 try:
                                     force_start_date[grade_plant_key] = pd.to_datetime(row['Force Start Date']).date()
@@ -631,16 +621,7 @@ if uploaded_file:
                             else:
                                 force_start_date[grade_plant_key] = None
                             
-                            # FIXED: Improved Rerun Allowed parsing
-                            rerun_val = row['Rerun Allowed']
-                            if pd.notna(rerun_val):
-                                val_str = str(rerun_val).strip().lower()
-                                if val_str in ['no', 'n', 'false', '0']:
-                                    rerun_allowed[grade_plant_key] = False
-                                else:
-                                    rerun_allowed[grade_plant_key] = True
-                            else:
-                                rerun_allowed[grade_plant_key] = True
+                            rerun_allowed[grade_plant_key] = parse_rerun_allowed(row['Rerun Allowed'])
                     
                     # Material running info
                     material_running_info = {}
@@ -674,7 +655,7 @@ if uploaded_file:
                 
                 for grade in grades:
                     if grade in demand_df.columns:
-                        demand_data[grade] = {demand_df.iloc[i, 0].date(): demand_df[grade].iloc[i] for i in range(len(demand_df))}
+                        demand_data[grade] = {demand_df.iloc[i, 0].date(): int(demand_df[grade].iloc[i]) for i in range(len(demand_df))}
                     else:
                         st.warning(f"Demand data not found for grade '{grade}'. Assuming zero demand.")
                         demand_data[grade] = {date: 0 for date in dates}
@@ -683,6 +664,13 @@ if uploaded_file:
                     for date in dates[-buffer_days:]:
                         if date not in demand_data[grade]:
                             demand_data[grade][date] = 0
+                
+                # Validate demands
+                for grade in grades:
+                    for date, demand in demand_data[grade].items():
+                        if demand < 0:
+                            st.error(f"Invalid negative demand for {grade} on {date}: {demand}")
+                            st.stop()
                 
                 # Process shutdown dates
                 shutdown_periods = process_shutdown_dates(plant_df, dates)
@@ -714,6 +702,7 @@ if uploaded_file:
                 def is_allowed_combination(grade, line):
                     return line in allowed_lines.get(grade, [])
                 
+                # Create production variables
                 for grade in grades:
                     for line in allowed_lines[grade]:
                         for d in range(num_days):
@@ -742,7 +731,7 @@ if uploaded_file:
                         return None
                     return is_producing[key]
                 
-                # SHUTDOWN CONSTRAINTS: No production during shutdown periods
+                # SHUTDOWN CONSTRAINTS
                 for line in lines:
                     if line in shutdown_periods and shutdown_periods[line]:
                         for d in shutdown_periods[line]:
@@ -750,11 +739,10 @@ if uploaded_file:
                                 if is_allowed_combination(grade, line):
                                     key = (grade, line, d)
                                     if key in is_producing:
-                                        # Force no production during shutdown
                                         model.Add(is_producing[key] == 0)
                                         model.Add(production[key] == 0)
 
-                # FIXED: Document shutdown impact for validation
+                # Document shutdown impact
                 shutdown_demand = {}
                 for grade in grades:
                     shutdown_demand[grade] = 0
@@ -763,21 +751,23 @@ if uploaded_file:
                             for d in shutdown_periods[line]:
                                 shutdown_demand[grade] += demand_data[grade].get(dates[d], 0)
                 
-                # Add warning if shutdown causes potential issues
                 for grade, total_shutdown_demand in shutdown_demand.items():
                     if total_shutdown_demand > initial_inventory[grade]:
                         st.warning(f"⚠️ Grade '{grade}': Shutdown periods require {total_shutdown_demand} MT from inventory (current: {initial_inventory[grade]} MT). Consider increasing opening inventory or adjusting shutdown schedule.")
                 
+                # Create inventory and stockout variables
                 inventory_vars = {}
                 for grade in grades:
                     for d in range(num_days + 1):
-                        inventory_vars[(grade, d)] = model.NewIntVar(0, 100000, f'inventory_{grade}_{d}')
+                        max_inv = min(max_inventory[grade], MAX_INVENTORY_BOUND)
+                        inventory_vars[(grade, d)] = model.NewIntVar(0, max_inv, f'inventory_{grade}_{d}')
                 
                 stockout_vars = {}
                 for grade in grades:
                     for d in range(num_days):
-                        stockout_vars[(grade, d)] = model.NewIntVar(0, 100000, f'stockout_{grade}_{d}')
+                        stockout_vars[(grade, d)] = model.NewIntVar(0, MAX_STOCKOUT_BOUND, f'stockout_{grade}_{d}')
                 
+                # One grade per line constraint
                 for line in lines:
                     for d in range(num_days):
                         producing_vars = []
@@ -789,6 +779,7 @@ if uploaded_file:
                         if producing_vars:
                             model.Add(sum(producing_vars) <= 1)
                 
+                # Material running constraints
                 for plant, (material, expected_days) in material_running_info.items():
                     for d in range(min(expected_days, num_days)):
                         if is_allowed_combination(material, plant):
@@ -799,7 +790,7 @@ if uploaded_file:
                 
                 objective = 0
                 
-                # FIXED CORRECTED INVENTORY BALANCE with proper stockout handling
+                # IMPROVED INVENTORY BALANCE
                 for grade in grades:
                     model.Add(inventory_vars[(grade, 0)] == initial_inventory[grade])
                 
@@ -811,35 +802,23 @@ if uploaded_file:
                         )
                         demand_today = demand_data[grade].get(dates[d], 0)
                         
-                        # Step 1: Calculate available inventory (expression, no variable needed)
-                        # available = inventory_vars[(grade, d)] + produced_today
-                        
-                        # Step 2: Determine what can be supplied
-                        supplied = model.NewIntVar(0, 100000, f'supplied_{grade}_{d}')
-                        model.Add(supplied <= inventory_vars[(grade, d)] + produced_today)
-                        model.Add(supplied <= demand_today)
-                        
-                        # Step 3: Calculate stockout based on unmet demand
-                        model.Add(stockout_vars[(grade, d)] == demand_today - supplied)
-                        
-                        # Step 4: Calculate closing inventory
-                        model.Add(inventory_vars[(grade, d + 1)] == inventory_vars[(grade, d)] + produced_today - supplied)
+                        # Direct inventory calculation
+                        # inventory[d+1] = inventory[d] + production - demand + stockout
+                        # where stockout covers the deficit when inventory + production < demand
+                        model.Add(
+                            inventory_vars[(grade, d + 1)] == 
+                            inventory_vars[(grade, d)] + produced_today - demand_today + stockout_vars[(grade, d)]
+                        )
                         
                         # Ensure non-negativity
+                        model.Add(stockout_vars[(grade, d)] >= 0)
                         model.Add(inventory_vars[(grade, d + 1)] >= 0)
                 
-                # Minimum inventory constraints (as soft constraints with penalties)
+                # Minimum inventory constraints (hard constraints)
                 for grade in grades:
                     for d in range(num_days):
                         if min_inventory[grade] > 0:
-                            min_inv_value = int(min_inventory[grade])
-                            inventory_tomorrow = inventory_vars[(grade, d + 1)]
-                            
-                            # Create a deficit variable that is positive when below minimum
-                            deficit = model.NewIntVar(0, 100000, f'deficit_{grade}_{d}')
-                            model.Add(deficit >= min_inv_value - inventory_tomorrow)
-                            model.Add(deficit >= 0)
-                            objective += stockout_penalty * deficit
+                            model.Add(inventory_vars[(grade, d + 1)] >= min_inventory[grade])
                 
                 # Minimum Closing Inventory constraint
                 for grade in grades:
@@ -847,18 +826,16 @@ if uploaded_file:
                     min_closing = min_closing_inventory[grade]
                     
                     if min_closing > 0:
-                        closing_deficit = model.NewIntVar(0, 100000, f'closing_deficit_{grade}')
-                        model.Add(closing_deficit >= min_closing - closing_inventory)
-                        model.Add(closing_deficit >= 0)
-                        objective += stockout_penalty * closing_deficit * 3  # Higher penalty for closing inventory
+                        model.Add(closing_inventory >= min_closing)
                 
+                # Maximum inventory constraints
                 for grade in grades:
                     for d in range(1, num_days + 1):
                         model.Add(inventory_vars[(grade, d)] <= max_inventory[grade])
                 
+                # Capacity constraints
                 for line in lines:
                     for d in range(num_days - buffer_days):
-                        # Skip shutdown days for full capacity requirement
                         if line in shutdown_periods and d in shutdown_periods[line]:
                             continue
                         production_vars = [
@@ -878,7 +855,7 @@ if uploaded_file:
                         if production_vars:
                             model.Add(sum(production_vars) <= capacities[line])
                 
-                # Force Start Date per (grade, plant) combination
+                # Force Start Date constraints
                 for grade_plant_key, start_date in force_start_date.items():
                     if start_date:
                         grade, plant = grade_plant_key
@@ -893,17 +870,12 @@ if uploaded_file:
                         except ValueError:
                             st.warning(f"⚠️ Force start date '{start_date.strftime('%d-%b-%y')}' for grade '{grade}' on plant '{plant}' not found in demand dates")
                 
-                # Minimum & Maximum Run Days per (grade, plant) - account for shutdown interruptions
+                # Create start and end variables for run constraints
                 is_start_vars = {}
                 run_end_vars = {}
                 
                 for grade in grades:
                     for line in allowed_lines[grade]:
-                        grade_plant_key = (grade, line)
-                        min_run = min_run_days.get(grade_plant_key, 1)
-                        max_run = max_run_days.get(grade_plant_key, 9999)
-                        
-                        # Create start and end variables
                         for d in range(num_days):
                             is_start = model.NewBoolVar(f'start_{grade}_{line}_{d}')
                             is_start_vars[(grade, line, d)] = is_start
@@ -913,7 +885,7 @@ if uploaded_file:
                             
                             current_prod = get_is_producing_var(grade, line, d)
                             
-                            # Start definition: producing today but not yesterday (or today is day 0)
+                            # Start definition
                             if d > 0:
                                 prev_prod = get_is_producing_var(grade, line, d - 1)
                                 if current_prod is not None and prev_prod is not None:
@@ -924,7 +896,7 @@ if uploaded_file:
                                     model.Add(current_prod == 1).OnlyEnforceIf(is_start)
                                     model.Add(is_start == 1).OnlyEnforceIf(current_prod)
                             
-                            # End definition: producing today but not tomorrow (or today is last day)
+                            # End definition
                             if d < num_days - 1:
                                 next_prod = get_is_producing_var(grade, line, d + 1)
                                 if current_prod is not None and next_prod is not None:
@@ -935,50 +907,54 @@ if uploaded_file:
                                     model.Add(current_prod == 1).OnlyEnforceIf(is_end)
                                     model.Add(is_end == 1).OnlyEnforceIf(current_prod)
                 
-                        # MINIMUM RUN DAYS: If we start a run, it must continue for at least min_run days
-                        # (unless interrupted by shutdown)
+                # MINIMUM RUN DAYS CONSTRAINTS
+                for grade in grades:
+                    for line in allowed_lines[grade]:
+                        grade_plant_key = (grade, line)
+                        min_run = min_run_days.get(grade_plant_key, DEFAULT_MIN_RUN_DAYS)
+                        
                         for d in range(num_days):
                             is_start = is_start_vars[(grade, line, d)]
                             
-                            # Check how many consecutive non-shutdown days we have from day d
                             max_possible_run = 0
                             for k in range(min_run):
                                 if d + k < num_days:
-                                    # Check if this day is a shutdown day
                                     if line in shutdown_periods and (d + k) in shutdown_periods[line]:
                                         break
                                     max_possible_run += 1
                             
-                            # Only enforce if we have enough consecutive days available
                             if max_possible_run >= min_run:
-                                # Force production for the next min_run days (if no shutdown)
                                 for k in range(min_run):
                                     if d + k < num_days:
-                                        # Skip if this is a shutdown day
                                         if line in shutdown_periods and (d + k) in shutdown_periods[line]:
                                             continue
                                         future_prod = get_is_producing_var(grade, line, d + k)
                                         if future_prod is not None:
                                             model.Add(future_prod == 1).OnlyEnforceIf(is_start)
                 
-                        # FIXED: MAXIMUM RUN DAYS - Single correct implementation
-                        # Use a sliding window approach with consecutive production counting
-                        for d in range(num_days - max_run):
-                            # Count consecutive days of production starting from day d
-                            consecutive_days = []
-                            for k in range(max_run + 1):
-                                if d + k < num_days:
-                                    # Skip shutdown days - they break the run naturally
-                                    if line in shutdown_periods and (d + k) in shutdown_periods[line]:
+                # OPTIMIZED MAXIMUM RUN DAYS CONSTRAINTS
+                for grade in grades:
+                    for line in allowed_lines[grade]:
+                        grade_plant_key = (grade, line)
+                        max_run = max_run_days.get(grade_plant_key, DEFAULT_MAX_RUN_DAYS)
+                        
+                        if max_run < DEFAULT_MAX_RUN_DAYS:
+                            for d in range(num_days - max_run):
+                                production_window = []
+                                for k in range(max_run + 1):
+                                    day_idx = d + k
+                                    if day_idx >= num_days:
                                         break
-                                    prod_var = get_is_producing_var(grade, line, d + k)
+                                    if line in shutdown_periods and day_idx in shutdown_periods[line]:
+                                        break
+                                    prod_var = get_is_producing_var(grade, line, day_idx)
                                     if prod_var is not None:
-                                        consecutive_days.append(prod_var)
-                            
-                            # If we have max_run+1 consecutive days available, prevent all being active
-                            if len(consecutive_days) == max_run + 1:
-                                model.Add(sum(consecutive_days) <= max_run)
+                                        production_window.append(prod_var)
+                                
+                                if len(production_window) == max_run + 1:
+                                    model.Add(sum(production_window) <= max_run)
                 
+                # Transition rules constraints
                 for line in lines:
                     if transition_rules.get(line):
                         for d in range(num_days - 1):
@@ -996,46 +972,73 @@ if uploaded_file:
                                             if prev_var is not None and current_var is not None:
                                                 model.Add(prev_var + current_var <= 1)
 
-                # Rerun Allowed Constraints
+                # RERUN ALLOWED CONSTRAINTS
                 for grade in grades:
                     for line in allowed_lines[grade]:
                         grade_plant_key = (grade, line)
                         if not rerun_allowed.get(grade_plant_key, True):
-                            # If rerun not allowed, don't start multiple runs
-                            starts = [is_start_vars[(grade, line, d)] for d in range(num_days) 
-                                     if (grade, line, d) in is_start_vars]
+                            starts = []
+                            for d in range(num_days):
+                                if (grade, line, d) in is_start_vars:
+                                    starts.append(is_start_vars[(grade, line, d)])
+                            
                             if starts:
                                 model.Add(sum(starts) <= 1)
 
-                # Stockout penalties in objective
+                # STOCKOUT PENALTIES
                 for grade in grades:
                     for d in range(num_days):
                         objective += stockout_penalty * stockout_vars[(grade, d)]
 
-                # Transition penalties and continuity bonuses
+                # SIMPLIFIED TRANSITION PENALTIES AND CONTINUITY BONUSES
                 for line in lines:
                     for d in range(num_days - 1):
-                        transition_vars = []
+                        # Skip if next day is shutdown
+                        if line in shutdown_periods and (d + 1) in shutdown_periods[line]:
+                            continue
+                        
+                        for grade in grades:
+                            if line not in allowed_lines[grade]:
+                                continue
+                            
+                            current_var = get_is_producing_var(grade, line, d)
+                            next_var = get_is_producing_var(grade, line, d + 1)
+                            
+                            if current_var is None or next_var is None:
+                                continue
+                            
+                            # Continuity bonus
+                            continuity = model.NewBoolVar(f'cont_{line}_{d}_{grade}')
+                            model.AddBoolAnd([current_var, next_var]).OnlyEnforceIf(continuity)
+                            model.AddBoolOr([current_var.Not(), next_var.Not()]).OnlyEnforceIf(continuity.Not())
+                            objective += -continuity_bonus * continuity
+                        
+                        # Transition penalty (any grade change)
                         for grade1 in grades:
                             if line not in allowed_lines[grade1]:
                                 continue
+                            current_var1 = get_is_producing_var(grade1, line, d)
+                            if current_var1 is None:
+                                continue
+                            
                             for grade2 in grades:
-                                if line not in allowed_lines[grade2] or grade1 == grade2:
+                                if grade1 == grade2 or line not in allowed_lines[grade2]:
                                     continue
-                                if transition_rules.get(line) and grade1 in transition_rules[line] and grade2 not in transition_rules[line][grade1]:
+                                
+                                # Check transition rules if they exist
+                                if transition_rules.get(line) and grade1 in transition_rules[line]:
+                                    if grade2 not in transition_rules[line][grade1]:
+                                        continue  # Not allowed, already handled above
+                                
+                                next_var2 = get_is_producing_var(grade2, line, d + 1)
+                                if next_var2 is None:
                                     continue
+                                
+                                # Transition from grade1 to grade2
                                 trans_var = model.NewBoolVar(f'trans_{line}_{d}_{grade1}_to_{grade2}')
-                                model.AddBoolAnd([is_producing[(grade1, line, d)], is_producing[(grade2, line, d + 1)]]).OnlyEnforceIf(trans_var)
-                                model.Add(trans_var == 0).OnlyEnforceIf(is_producing[(grade1, line, d)].Not())
-                                model.Add(trans_var == 0).OnlyEnforceIf(is_producing[(grade2, line, d + 1)].Not())
-                                transition_vars.append(trans_var)
+                                model.AddBoolAnd([current_var1, next_var2]).OnlyEnforceIf(trans_var)
+                                model.AddBoolOr([current_var1.Not(), next_var2.Not()]).OnlyEnforceIf(trans_var.Not())
                                 objective += transition_penalty * trans_var
-
-                        for grade in grades:
-                            if line in allowed_lines[grade]:
-                                continuity = model.NewBoolVar(f'continuity_{line}_{d}_{grade}')
-                                model.AddBoolAnd([is_producing[(grade, line, d)], is_producing[(grade, line, d + 1)]]).OnlyEnforceIf(continuity)
-                                objective += -continuity_bonus * continuity
 
                 model.Minimize(objective)
 
@@ -1044,9 +1047,16 @@ if uploaded_file:
 
                 solver = cp_model.CpSolver()
                 solver.parameters.max_time_in_seconds = time_limit_min * 60.0
+                
+                # OPTIMIZED SOLVER PARAMETERS
                 solver.parameters.num_search_workers = 8
-                solver.parameters.random_seed = 42  # FIXED: Add for repeatability
-                solver.parameters.log_search_progress = True  # Optional: for debugging
+                solver.parameters.random_seed = 42
+                solver.parameters.linearization_level = 2
+                solver.parameters.cp_model_presolve = True
+                solver.parameters.symmetry_level = 2
+                solver.parameters.search_branching = cp_model.PORTFOLIO_SEARCH
+                solver.parameters.optimize_with_core = True
+                solver.parameters.log_search_progress = True
                 
                 solution_callback = SolutionCallback(production, inventory_vars, stockout_vars, is_producing, grades, lines, dates, formatted_dates, num_days)
 
@@ -1137,7 +1147,6 @@ if uploaded_file:
                                 grade_totals[grade] += total_prod
                                 plant_totals[line] += total_prod
                             
-                            # Calculate total stockout for this grade
                             for d in range(num_days):
                                 key = (grade, d)
                                 if key in stockout_vars:
@@ -1347,7 +1356,7 @@ if uploaded_file:
                                 hovertemplate="Date: %{x|%d-%b-%y}<br>Inventory: %{y:.0f} MT<extra></extra>"
                             ))
                         
-                            # Add shutdown periods for plants that produce this grade
+                            # Add shutdown periods
                             shutdown_added = False
                             for line in allowed_lines[grade]:
                                 if line in shutdown_periods and shutdown_periods[line]:
@@ -1355,7 +1364,6 @@ if uploaded_file:
                                     start_shutdown = dates[shutdown_days[0]]
                                     end_shutdown = dates[shutdown_days[-1]]
                                     
-                                    # Add vertical shaded regions for shutdown periods
                                     fig.add_vrect(
                                         x0=start_shutdown,
                                         x1=end_shutdown + timedelta(days=1),
@@ -1443,7 +1451,6 @@ if uploaded_file:
                                 showlegend=False
                             )
                             
-                            # Add annotations one by one with explicit parameters
                             for ann in annotations:
                                 fig.add_annotation(
                                     x=ann['x'],
@@ -1488,6 +1495,8 @@ if uploaded_file:
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
         st.info("Please make sure your Excel file has the required sheets: 'Plant', 'Inventory', and 'Demand'")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
 
 else:
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
@@ -1543,13 +1552,14 @@ else:
         """)
     
     with col2:
-        st.download_button(
-            label="📥 Download Sample Template",
-            data=sample_workbook,
-            file_name="polymer_production_template.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+        if sample_workbook:
+            st.download_button(
+                label="📥 Download Sample Template",
+                data=sample_workbook,
+                file_name="polymer_production_template.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
     
     with st.expander("📋 Required Excel File Format Details"):
         st.markdown("""
@@ -1603,6 +1613,6 @@ else:
 
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: gray;'>Polymer Production Scheduler • Built with Streamlit • Multi-Plant Support • Shutdown Visualization</div>",
+    "<div style='text-align: center; color: gray;'>Polymer Production Scheduler • Built with Streamlit • Optimized with OR-Tools • Multi-Plant Support • Shutdown Visualization</div>",
     unsafe_allow_html=True
 )
