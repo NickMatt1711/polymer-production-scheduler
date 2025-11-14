@@ -771,14 +771,16 @@ with tab3:
                 # Capacity constraints
                 for line in lines:
                     for d in range(num_days - buffer_days):
-                        if line not in shutdown_periods or d not in shutdown_periods.get(line, []):
-                            production_vars = [
-                                get_production_var(grade, line, d) 
-                                for grade in grades 
-                                if is_allowed_combination(grade, line)
-                            ]
-                            if production_vars:
-                                model.Add(sum(production_vars) == capacities[line])
+                        # Skip shutdown days for full capacity requirement
+                        if line in shutdown_periods and d in shutdown_periods[line]:
+                            continue
+                        production_vars = [
+                            get_production_var(grade, line, d) 
+                            for grade in grades 
+                            if is_allowed_combination(grade, line)
+                        ]
+                        if production_vars:
+                            model.Add(sum(production_vars) == capacities[line])
                     
                     for d in range(num_days - buffer_days, num_days):
                         production_vars = [
