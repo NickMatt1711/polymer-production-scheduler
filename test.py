@@ -1,4 +1,5 @@
 # test.py
+# Fintech-style UI redesign (Stripe-like) — UI only. Solver & visualizations unchanged.
 import streamlit as st
 import pandas as pd
 from ortools.sat.python import cp_model
@@ -19,6 +20,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
 
+# --------------------------
+# Helper functions (unchanged behavior)
+# --------------------------
 def get_sample_workbook():
     """Retrieve the sample workbook from the same directory as app.py"""
     try:
@@ -78,7 +82,7 @@ def process_shutdown_dates(plant_df, dates):
     return shutdown_periods
 
 # ---------------------------
-# Page config & lightweight UI redesign (no solver changes)
+# Page config & session state
 # ---------------------------
 st.set_page_config(
     page_title="Polymer Production Scheduler",
@@ -87,7 +91,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Lightweight reset of session state keys used by the app
+# session state keys used by the app (initialize if missing)
 if 'current_step' not in st.session_state:
     st.session_state.current_step = 0
 if 'solutions' not in st.session_state:
@@ -95,174 +99,210 @@ if 'solutions' not in st.session_state:
 if 'best_solution' not in st.session_state:
     st.session_state.best_solution = None
 
-# Modernized CSS - clean, flat, responsive, and minimal
+# ---------------------------
+# Stripe-style CSS (Fintech dashboard)
+# - Minimal, structured, ample whitespace
+# - Neutral surfaces, subtle borders, crisp typography
+# ---------------------------
 st.markdown("""
 <style>
-/* Root adjustments */
-:root{
-    --brand: #5469F5;
-    --muted: #6b7280;
-    --card-bg: #ffffff;
-    --surface: #f8fafc;
-    --accent: #667eea;
+/* Design tokens */
+:root {
+  --bg: #f7fafc;
+  --surface: #ffffff;
+  --muted: #68707d;
+  --text: #0b1220;
+  --primary: #2563eb; /* blue-600 */
+  --accent: #6d28d9;  /* purple-700 */
+  --danger: #ef4444;
+  --success: #10b981;
+  --border: rgba(11,18,32,0.06);
 }
 
-/* Page background and font smoothing */
+/* App background & base font */
 .reportview-container, .main .block-container {
-    background: linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
-    color: #0f172a;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
 }
 
-/* Header */
-.header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 18px 20px;
-    border-radius: 12px;
-    background: linear-gradient(90deg, rgba(84,105,245,0.95) 0%, rgba(118,75,162,0.95) 100%);
-    color: white;
-    box-shadow: 0 8px 30px rgba(86,100,233,0.12);
-    margin-bottom: 18px;
+/* Header: left aligned brand, small action area on right */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.9), rgba(255,255,255,0.9));
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
 }
-.header .title {
-    font-size: 1.45rem;
-    font-weight: 700;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.header .subtitle {
-    font-size: 0.92rem;
-    opacity: 0.95;
-    margin-top: 2px;
+.logo {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: white;
+  height: 42px;
+  width: 42px;
+  border-radius: 8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:800;
+  box-shadow: 0 6px 18px rgba(37,99,235,0.08);
+  font-size:18px;
 }
-
-/* Top-level container cards */
-.section {
-    background: var(--card-bg);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 4px 12px rgba(15,23,42,0.04);
-    border: 1px solid rgba(15,23,42,0.04);
-    margin-bottom: 18px;
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
 }
-
-/* Section titles */
-.section-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #0f172a;
-    margin-bottom: 12px;
-    display: block;
+.subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
 }
 
-/* Info / success tiny boxes */
-.tiny-info {
-    padding: 8px 12px;
-    border-radius: 8px;
-    background: #F1F5F9;
-    color: #0f172a;
-    font-weight: 600;
+/* Action area */
+.header-actions {
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+.kpi {
+  text-align: right;
+  font-weight:700;
+  font-size: 14px;
+}
+.kpi-sub { font-size:12px; color:var(--muted); font-weight:600; }
+
+/* Sidebar - full height column look */
+[data-testid="stSidebar"] {
+  background: var(--surface);
+  padding: 18px 16px 24px 16px;
+  border-right: 1px solid var(--border);
+  min-width: 320px;
+  box-shadow: none;
 }
 
-/* Metric cards */
-.metrics-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+/* Sidebar groups */
+.sidebar-group {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff, #ffffff);
+  padding: 14px;
+  border-radius: 10px;
+  margin-bottom: 12px;
 }
-.metric {
-    background: linear-gradient(90deg, rgba(102,126,234,0.09), rgba(118,75,162,0.06));
-    padding: 14px;
-    border-radius: 10px;
-    min-width: 170px;
-    flex: 1;
-    box-shadow: 0 6px 18px rgba(102,126,234,0.06);
-}
-.metric .label { font-size: 0.8rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px }
-.metric .value { font-size: 1.55rem; font-weight: 800; margin-top: 6px; }
 
-/* Streamlit buttons slight style */
+/* Buttons */
 .stButton>button {
-    border-radius: 8px;
-    padding: 0.55rem 1rem;
-    background: var(--accent);
-    color: white;
-    border: none;
-    font-weight: 700;
-    box-shadow: 0 6px 18px rgba(102,126,234,0.08);
+  background: var(--primary);
+  color: white;
+  border-radius: 8px;
+  padding: 0.6rem 12px;
+  border: none;
+  font-weight:700;
+  box-shadow: 0 6px 18px rgba(37,99,235,0.07);
 }
 .stButton>button:hover { transform: translateY(-2px); }
 
-/* Tabs style - more compact */
+/* Cards and sections */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 6px 20px rgba(11,18,32,0.02);
+  margin-bottom: 16px;
+}
+
+/* Section titles */
+.h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+
+/* Metric tiles (inline) */
+.metrics {
+  display:flex;
+  gap:12px;
+  align-items:center;
+  margin-bottom: 12px;
+}
+.metric-tile {
+  background: linear-gradient(180deg,#fff,#fff);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border-radius: 8px;
+  min-width: 140px;
+}
+.metric-label { color: var(--muted); font-size: 12px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; }
+.metric-value { font-size:18px; font-weight:800; margin-top:6px; }
+
+/* DataFrames look */
+.dataframe { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+tbody tr:nth-child(odd) td { background: #ffffff; }
+tbody tr:nth-child(even) td { background: #fbfcfe; }
+
+/* Tabs */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
-    background-color: transparent;
-    padding: 6px;
-    border-radius: 10px;
-    margin-bottom: 8px;
+  gap: 8px;
+  background-color: transparent;
+  padding: 6px;
 }
 .stTabs [data-baseweb="tab"] {
-    background-color: #ffffff;
-    border-radius: 10px;
-    padding: 8px 14px;
-    font-weight: 700;
-    color: #111827;
-    border: 1px solid rgba(15,23,42,0.04);
+  background-color: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight:700;
+  border: 1px solid var(--border);
 }
 .stTabs [aria-selected="true"] {
-    background: linear-gradient(90deg, var(--accent), #8b5cf6);
-    color: #fff !important;
-}
-
-/* Dataframe tweaks */
-tbody tr:nth-child(odd) td { background: #fbfdff; }
-tbody tr:nth-child(even) td { background: white; }
-.dataframe { border-radius: 8px; overflow: hidden; }
-
-/* Sidebar tweaks */
-[data-testid="stSidebar"] {
-    padding-top: 18px;
-    padding-left: 14px;
-    padding-right: 14px;
-    background: linear-gradient(180deg, #ffffff 0%, #fbfbff 100%);
-}
-[data-testid="stSidebar"] .stButton>button { width:100%; }
-
-/* Responsive adjustments */
-@media (max-width: 900px) {
-    .metrics-row { flex-direction: column; }
-    .header { flex-direction: column; align-items: flex-start; gap: 6px; }
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  color: #fff !important;
+  box-shadow: 0 6px 18px rgba(37,99,235,0.08);
 }
 
 /* Footer */
-.footer {
-    text-align: center;
-    color: #6b7280;
-    font-size: 0.85rem;
-    margin-top: 18px;
-    padding-top: 6px;
-}
+.app-footer { margin-top: 18px; text-align:center; color:var(--muted); font-size:13px; }
 
-/* subtle helper classes */
-.small-muted { color: #6b7280; font-size: 0.9rem; }
+/* Responsive */
+@media (max-width: 900px) {
+  [data-testid="stSidebar"] { min-width: 100% !important; border-right: none; border-bottom: 1px solid var(--border); }
+  .metrics { flex-direction: column; align-items:flex-start; }
+}
 </style>
 """, unsafe_allow_html=True)
 
-# Header (kept visual only)
+# ---------------------------
+# Header (Stripe-style)
+# ---------------------------
 st.markdown("""
-<div class="header">
-  <div>
-    <div class="title">🏭 Polymer Production Scheduler</div>
-    <div class="subtitle">Multi-Plant Optimization • Shutdown-aware scheduling</div>
+<div class="app-header">
+  <div class="brand">
+    <div class="logo">PP</div>
+    <div>
+      <div class="title">Polymer Production Scheduler</div>
+      <div class="subtitle">Shutdown-aware multi-plant optimization</div>
+    </div>
   </div>
-  <div style="text-align:right;">
-    <div style="font-weight:700; font-size:0.95rem;">Status: <span style="color:#32a852">UI-only redesign applied</span></div>
-    <div class="small-muted" style="margin-top:4px;">Solver & visualizations unchanged</div>
+  <div class="header-actions">
+    <div style="text-align:right;">
+      <div class="kpi">UI: Fintech Redesign</div>
+      <div class="kpi-sub">Solver unchanged</div>
+    </div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
+# ---------------------------
+# Solution callback (unchanged logic)
+# ---------------------------
 class SolutionCallback(cp_model.CpSolverSolutionCallback):
     def __init__(self, production, inventory, stockout, is_producing, grades, lines, dates, formatted_dates, num_days):
         cp_model.CpSolverSolutionCallback.__init__(self)
@@ -371,78 +411,87 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
         return len(self.solutions)
 
 # ---------------------------
-# Sidebar: Data upload & parameters
+# Sidebar: file upload & parameters (re-styled containers only)
 # ---------------------------
 with st.sidebar:
-    st.markdown("<div class='section' style='padding:12px;'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>📋 Input Data</div>", unsafe_allow_html=True)
-    
+    st.markdown("<div class='sidebar-group'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-weight:700; margin-bottom:8px;'>📥 Data</div>", unsafe_allow_html=True)
     uploaded_file = st.file_uploader(
         "Upload Excel File", 
         type=["xlsx"],
         help="Upload an Excel file with Plant, Inventory, and Demand sheets"
     )
-    
-    if uploaded_file:
-        st.success("File uploaded")
-        
-        st.markdown("### ⚙️ Parameters")
-        with st.expander("Basic Parameters", expanded=True):
-            time_limit_min = st.number_input(
-                "Time limit (minutes)",
-                min_value=1,
-                max_value=120,
-                value=10,
-                help="Maximum time to run the optimization"
-            )
-            
-            buffer_days = st.number_input(
-                "Buffer days",
-                min_value=0,
-                max_value=7,
-                value=3,
-                help="Additional days for planning buffer"
-            )
-        
-        with st.expander("Objective Weights", expanded=True):
-            stockout_penalty = st.number_input(
-                "Stockout penalty",
-                min_value=1,
-                value=10,
-                help="Penalty weight for stockouts in objective function"
-            )
-            
-            transition_penalty = st.number_input(
-                "Transition penalty", 
-                min_value=1,
-                value=10,
-                help="Penalty weight for production line transitions"
-            )
-            
-            continuity_bonus = st.number_input(
-                "Continuity bonus",
-                min_value=0,
-                value=1,
-                help="Bonus for continuing the same grade (negative penalty)"
-            )
-    else:
-        # Show a small help block when no file is uploaded
-        st.markdown("<div class='small-muted' style='margin-top:8px;'>Upload the sample template (bottom of page) or your own Excel file to start.</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
+    st.markdown("<div class='sidebar-group'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-weight:700; margin-bottom:8px;'>⚙️ Optimization Parameters</div>", unsafe_allow_html=True)
+
+    if uploaded_file:
+        time_limit_min = st.number_input(
+            "Time limit (minutes)",
+            min_value=1,
+            max_value=120,
+            value=10,
+            help="Maximum time to run the optimization"
+        )
+        
+        buffer_days = st.number_input(
+            "Buffer days",
+            min_value=0,
+            max_value=7,
+            value=3,
+            help="Additional days for planning buffer"
+        )
+        
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-weight:600; margin-bottom:6px;'>Objective weights</div>", unsafe_allow_html=True)
+
+        stockout_penalty = st.number_input(
+            "Stockout penalty",
+            min_value=1,
+            value=10,
+            help="Penalty weight for stockouts in objective function"
+        )
+        
+        transition_penalty = st.number_input(
+            "Transition penalty", 
+            min_value=1,
+            value=10,
+            help="Penalty weight for production line transitions"
+        )
+        
+        continuity_bonus = st.number_input(
+            "Continuity bonus",
+            min_value=0,
+            value=1,
+            help="Bonus for continuing the same grade (negative penalty)"
+        )
+
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("<div style='padding:4px 0; text-align:center;'>", unsafe_allow_html=True)
+        st.button("🎯 Run Production Optimization", type="primary", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        # Minimal guidance when file not uploaded
+        st.markdown("<div style='color:var(--muted); font-size:13px;'>Upload your Excel file to enable parameters and run optimization.</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
 # ---------------------------
-# Main app body: input -> preprocessing -> model -> results
+# Main body — same workflow and logic as original file
+# (I kept solver, model, and all plotting code the same; only UI wrappers and classes changed)
 # ---------------------------
 if uploaded_file:
     try:
         uploaded_file.seek(0)
         excel_file = io.BytesIO(uploaded_file.read())
         
-        st.markdown("<div class='section'>", unsafe_allow_html=True)
-        st.markdown("<div class='section-title'>📈 Data Preview & Validation</div>", unsafe_allow_html=True)
+        # Data preview area
+        st.markdown("<div class='panel'>", unsafe_allow_html=True)
+        st.markdown("<div class='h2'>📈 Data preview & validation</div>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns(3)
-        
         with col1:
             try:
                 plant_df = pd.read_excel(excel_file, sheet_name='Plant')
@@ -460,7 +509,6 @@ if uploaded_file:
             except Exception as e:
                 st.error(f"Error reading Plant sheet: {e}")
                 st.stop()
-        
         with col2:
             try:
                 excel_file.seek(0)
@@ -476,7 +524,6 @@ if uploaded_file:
             except Exception as e:
                 st.error(f"Error reading Inventory sheet: {e}")
                 st.stop()
-        
         with col3:
             try:
                 excel_file.seek(0)
@@ -495,35 +542,35 @@ if uploaded_file:
                 st.stop()
         
         st.markdown("</div>", unsafe_allow_html=True)
-        
-        # Display shutdown periods right after data preview (kept logic identical)
-        st.markdown("<div class='section'>", unsafe_allow_html=True)
-        st.markdown("<div class='section-title'>🔧 Shutdowns</div>", unsafe_allow_html=True)
-        with st.container():
-            shutdown_found = False
-            for index, row in plant_df.iterrows():
-                plant = row['Plant']
-                shutdown_start = row.get('Shutdown Start Date')
-                shutdown_end = row.get('Shutdown End Date')
-                
-                if pd.notna(shutdown_start) and pd.notna(shutdown_end):
-                    try:
-                        start_date = pd.to_datetime(shutdown_start).date()
-                        end_date = pd.to_datetime(shutdown_end).date()
-                        duration = (end_date - start_date).days + 1
-                        
-                        if start_date > end_date:
-                            st.warning(f"⚠️ Invalid shutdown period for {plant}: Start date is after end date")
-                        else:
-                            st.info(f"**{plant}**: Scheduled for shutdown from {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({duration} days)")
-                            shutdown_found = True
-                    except Exception as e:
-                        st.warning(f"⚠️ Invalid shutdown dates for {plant}: {e}")
+
+        # Shutdown info (kept logic)
+        st.markdown("<div class='panel'>", unsafe_allow_html=True)
+        st.markdown("<div class='h2'>🔧 Shutdowns</div>", unsafe_allow_html=True)
+        shutdown_found = False
+        for index, row in plant_df.iterrows():
+            plant = row['Plant']
+            shutdown_start = row.get('Shutdown Start Date')
+            shutdown_end = row.get('Shutdown End Date')
             
-            if not shutdown_found:
-                st.info("ℹ️ No plant shutdowns scheduled")
+            if pd.notna(shutdown_start) and pd.notna(shutdown_end):
+                try:
+                    start_date = pd.to_datetime(shutdown_start).date()
+                    end_date = pd.to_datetime(shutdown_end).date()
+                    duration = (end_date - start_date).days + 1
+                    
+                    if start_date > end_date:
+                        st.warning(f"⚠️ Invalid shutdown period for {plant}: Start date is after end date")
+                    else:
+                        st.info(f"**{plant}**: Scheduled for shutdown from {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({duration} days)")
+                        shutdown_found = True
+                except Exception as e:
+                    st.warning(f"⚠️ Invalid shutdown dates for {plant}: {e}")
+        
+        if not shutdown_found:
+            st.info("ℹ️ No plant shutdowns scheduled")
         st.markdown("</div>", unsafe_allow_html=True)
         
+        # Transition matrices (unchanged behavior)
         transition_dfs = {}
         for i in range(len(plant_df)):
             plant_name = plant_df['Plant'].iloc[i]
@@ -549,11 +596,13 @@ if uploaded_file:
             else:
                 st.info(f"ℹ️ No transition matrix found for {plant_name}. Assuming no transition constraints.")
                 transition_dfs[plant_name] = None
-        
+
         st.markdown("---")
-        st.markdown("<div class='section'>", unsafe_allow_html=True)
-        if st.button("🎯 Run Production Optimization", type="primary", use_container_width=True):
-            # Update process steps (kept behavior identical)
+        st.markdown("<div class='panel'>", unsafe_allow_html=True)
+        st.markdown("<div class='h2'>Run Optimization</div>", unsafe_allow_html=True)
+
+        if st.button("Run Optimization", type="primary", use_container_width=False):
+            # Keep process & logic identical
             st.session_state.current_step = 2  # Optimization running
             
             progress_bar = st.progress(0)
@@ -565,12 +614,11 @@ if uploaded_file:
             if 'best_solution' not in st.session_state:
                 st.session_state.best_solution = None
 
-            time.sleep(1)
-            
-            status_text.markdown('<div class="tiny-info">📄 Preprocessing data...</div>', unsafe_allow_html=True)
+            time.sleep(0.7)
+            status_text.markdown('<div style="padding:8px; border-radius:8px; background:#f1f5f9; color:#0b1220">📄 Preprocessing data...</div>', unsafe_allow_html=True)
             progress_bar.progress(10)
 
-            time.sleep(2)
+            time.sleep(1.2)
 
             try:
                 # Process inventory data with grade-plant combinations
@@ -691,7 +739,7 @@ if uploaded_file:
                 st.error(f"Traceback: {traceback.format_exc()}")
                 st.stop()
             
-            # Process demand data
+            # Process demand data (unchanged)
             demand_data = {}
             dates = sorted(list(set(demand_df.iloc[:, 0].dt.date.tolist())))
             num_days = len(dates)
@@ -732,9 +780,9 @@ if uploaded_file:
                     transition_rules[line] = None
             
             progress_bar.progress(30)
-            status_text.markdown('<div class="tiny-info">🔧 Building optimization model...</div>', unsafe_allow_html=True)
+            status_text.markdown('<div style="padding:8px; border-radius:8px; background:#f1f5f9; color:#0b1220">🔧 Building optimization model...</div>', unsafe_allow_html=True)
 
-            time.sleep(2)
+            time.sleep(1.6)
             
             model = cp_model.CpModel()
             
@@ -1070,7 +1118,7 @@ if uploaded_file:
             model.Minimize(objective)
 
             progress_bar.progress(50)
-            status_text.markdown('<div class="tiny-info">⚡ Running optimization solver...</div>', unsafe_allow_html=True)
+            status_text.markdown('<div style="padding:8px; border-radius:8px; background:#f1f5f9; color:#0b1220">⚡ Running optimization solver...</div>', unsafe_allow_html=True)
 
             solver = cp_model.CpSolver()
             solver.parameters.max_time_in_seconds = time_limit_min * 60.0
@@ -1087,56 +1135,46 @@ if uploaded_file:
             
             # Check solver status
             if status == cp_model.OPTIMAL:
-                status_text.markdown('<div class="tiny-info" style="background:#ecfdf5;color:#065f46">✅ Optimization completed optimally!</div>', unsafe_allow_html=True)
+                status_text.markdown('<div style="padding:8px; border-radius:8px; background:#ecfdf5; color:#065f46">✅ Optimization completed optimally!</div>', unsafe_allow_html=True)
             elif status == cp_model.FEASIBLE:
-                status_text.markdown('<div class="tiny-info" style="background:#ecfdf5;color:#065f46">✅ Optimization completed with feasible solution!</div>', unsafe_allow_html=True)
+                status_text.markdown('<div style="padding:8px; border-radius:8px; background:#ecfdf5; color:#065f46">✅ Optimization completed with feasible solution!</div>', unsafe_allow_html=True)
             else:
-                status_text.markdown('<div class="tiny-info" style="background:#fff7ed;color:#92400e">⚠️ Optimization ended without proven optimal solution.</div>', unsafe_allow_html=True)
+                status_text.markdown('<div style="padding:8px; border-radius:8px; background:#fff7ed; color:#92400e">⚠️ Optimization ended without proven optimal solution.</div>', unsafe_allow_html=True)
 
-            st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
-            st.markdown("<div class='section'>", unsafe_allow_html=True)
-            st.markdown("<div class='section-title'>📈 Results</div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+            st.markdown("<div class='panel'>", unsafe_allow_html=True)
+            st.markdown("<div class='h2'>📈 Results</div>", unsafe_allow_html=True)
 
             if solution_callback.num_solutions() > 0:
                 best_solution = solution_callback.solutions[-1]
 
-                st.markdown("### 📈 Key Metrics")
-            
-                col1, col2, col3, col4 = st.columns(4)
+                # KPI row (Stripe-style minimal tiles)
+                st.markdown("<div class='metrics'>", unsafe_allow_html=True)
+                col1, col2, col3, col4 = st.columns([1,1,1,1])
                 with col1:
-                    st.markdown(f"""
-                        <div class="metric">
-                            <div class="label">Objective Value</div>
-                            <div class="value">{best_solution['objective']:,.0f}</div>
-                            <div style="font-size:0.78rem; margin-top:6px; color:var(--muted)">↓ Lower is better</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown("<div class='metric-tile'>", unsafe_allow_html=True)
+                    st.markdown("<div class='metric-label'>Objective Value</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='metric-value'>{best_solution['objective']:,.0f}</div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
                 with col2:
-                    st.markdown(f"""
-                        <div class="metric">
-                            <div class="label">Total Transitions</div>
-                            <div class="value">{best_solution['transitions']['total']}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown("<div class='metric-tile'>", unsafe_allow_html=True)
+                    st.markdown("<div class='metric-label'>Total Transitions</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='metric-value'>{best_solution['transitions']['total']}</div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
                 with col3:
                     total_stockouts = sum(sum(best_solution['stockout'][g].values()) for g in grades)
-                    st.markdown(f"""
-                        <div class="metric">
-                            <div class="label">Total Stockouts</div>
-                            <div class="value">{total_stockouts:,.0f} MT</div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown("<div class='metric-tile'>", unsafe_allow_html=True)
+                    st.markdown("<div class='metric-label'>Total Stockouts</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='metric-value'>{total_stockouts:,.0f} MT</div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
                 with col4:
-                    st.markdown(f"""
-                        <div class="metric">
-                            <div class="label">Planning Horizon</div>
-                            <div class="value">{num_days} days</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                
+                    st.markdown("<div class='metric-tile'>", unsafe_allow_html=True)
+                    st.markdown("<div class='metric-label'>Planning Horizon</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='metric-value'>{num_days} days</div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Use tabs for different result views (visualization code unchanged)
+
+                # Tabs for production / summary / inventory (visualization code unchanged)
                 tab1, tab2, tab3 = st.tabs(["📅 Production Schedule", "📊 Summary", "📦 Inventory"])
                 
                 with tab1:
@@ -1514,87 +1552,55 @@ if uploaded_file:
                 - Adjust shutdown periods
                 """)
             
-            st.markdown("</div>", unsafe_allow_html=True)
-        
-        st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)  # results panel
+        st.markdown("</div>", unsafe_allow_html=True)  # run panel
 
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
         st.info("Please make sure your Excel file has the required sheets: 'Plant', 'Inventory', and 'Demand'")
 
 else:
-    # Landing / help content (redesigned)
-    st.markdown("<div class='section'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>Welcome</div>", unsafe_allow_html=True)
+    # Landing page content (Stripe-style)
+    st.markdown("<div class='panel'>", unsafe_allow_html=True)
+    st.markdown("<div class='h2'>Welcome</div>", unsafe_allow_html=True)
     st.markdown("""
-    <div style="display:flex; gap:12px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:220px;">
-        <div style="font-weight:700; margin-bottom:6px;">Quick Start</div>
-        <div class="small-muted">Download the sample template, upload your data, tune parameters and run the optimizer.</div>
+    <div style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap;">
+      <div style="flex:1; min-width:260px;">
+        <div style="font-weight:700; margin-bottom:6px;">Quick start</div>
+        <div style="color:#68707d;">Download the sample template, prepare Plant/Inventory/Demand sheets, upload and run the optimizer.</div>
       </div>
-      <div style="flex:1; min-width:220px;">
-        <div style="font-weight:700; margin-bottom:6px;">What we analyze</div>
-        <ul style="margin:0; padding-left:16px;">
-          <li>Plant capacities & constraints</li>
-          <li>Inventory & stockout planning</li>
-          <li>Transition matrices & run rules</li>
+      <div style="flex:1; min-width:260px;">
+        <div style="font-weight:700; margin-bottom:6px;">What this tool does</div>
+        <ul style="margin:0; padding-left:16px; color:#68707d;">
+          <li>Balance production across plants</li>
+          <li>Respect run-lengths & transition rules</li>
+          <li>Handle scheduled shutdowns</li>
         </ul>
       </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
-    
+
     sample_workbook = get_sample_workbook()
-    
-    st.markdown("---")
-    st.markdown("<div class='section'>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>📥 Get Started with Sample Template</div>", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([2, 1])
-    
+
+    st.markdown("<div class='panel'>", unsafe_allow_html=True)
+    st.markdown("<div class='h2'>📥 Sample template</div>", unsafe_allow_html=True)
+
+    col1, col2 = st.columns([2,1])
     with col1:
         st.markdown("""
-        **Download our sample template file to get started quickly:**
-        - Includes all required sheets with proper formatting
-        - Contains sample data that you can modify
-        - Ready-to-use structure for the optimization
-        - Includes example shutdown periods and transition matrices
+        **Download the sample template to get started quickly.**
+        It contains example Plant, Inventory and Demand sheets pre-configured.
         """)
-    
     with col2:
         st.download_button(
-            label="📥 Download Sample Template",
+            label="Download template",
             data=sample_workbook,
             file_name="polymer_production_template.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
-    
-    with st.expander("📋 Required Excel File Format Details"):
-        st.markdown("""
-        Your Excel file should contain the following sheets with these exact column headers:
-        
-        **1. Plant Sheet**
-        - `Plant`: Plant names (e.g., Plant1, Plant2)
-        - `Capacity per day`: Daily production capacity
-        - `Material Running`: Currently running material (optional)
-        - `Expected Run Days`: Expected run days (optional)
-        - `Shutdown Start Date`: Start date of plant shutdown/maintenance (optional)
-        - `Shutdown End Date`: End date of plant shutdown/maintenance (optional)
-        
-        **2. Inventory Sheet**
-        - `Grade Name`: Material grades (can be repeated for multi-plant configurations)
-        - `Opening Inventory`: Starting inventory levels (only first occurrence used)
-        - `Min. Inventory`: Minimum inventory requirements (only first occurrence used)
-        - `Max. Inventory`: Maximum inventory capacity (only first occurrence used)
-        - `Min. Run Days`: Minimum consecutive run days (per plant)
-        - `Max. Run Days`: Maximum consecutive run days (per plant)
-        - `Force Start Date`: Mandatory start dates (per plant, can be different for same grade)
-        - `Lines`: Allowed production lines (specify one plant per row for multi-plant grades)
-        - `Rerun Allowed`: Whether rerun is allowed (per plant, Yes/No)
-        - `Min. Closing Inventory`: Minimum closing inventory (only first occurrence used)
-        """)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Footer
-st.markdown("<div class='footer'>Polymer Production Scheduler • Built with Streamlit • Multi-Plant Support • Shutdown Visualization</div>", unsafe_allow_html=True)
+st.markdown("<div class='app-footer'>Polymer Production Scheduler • Built with Streamlit • UI redesign: Fintech Dashboard</div>", unsafe_allow_html=True)
