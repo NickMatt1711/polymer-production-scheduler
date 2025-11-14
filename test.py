@@ -121,7 +121,7 @@ def md3_card_end():
 
 def md3_chip(label, key, active=False):
     cls = "md3-chip active" if active else "md3-chip"
-    el = f'<button class="{cls}" onclick="{}" style="border:none;background:none;">{label}</button>'
+    el = f'<button class="{cls}" style="border:none;background:none;cursor:pointer;">{label}</button>'
     st.markdown(el, unsafe_allow_html=True)
 
 # -----------------------------
