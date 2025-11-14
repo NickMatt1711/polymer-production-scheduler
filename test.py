@@ -944,27 +944,28 @@ if uploaded_file:
                                         if future_prod is not None:
                                             model.Add(future_prod == 1).OnlyEnforceIf(is_start)
                 
-                # OPTIMIZED MAXIMUM RUN DAYS CONSTRAINTS
+                # MAXIMUM RUN DAYS CONSTRAINTS - RESTORED ORIGINAL LOGIC
                 for grade in grades:
                     for line in allowed_lines[grade]:
                         grade_plant_key = (grade, line)
                         max_run = max_run_days.get(grade_plant_key, DEFAULT_MAX_RUN_DAYS)
                         
-                        if max_run < DEFAULT_MAX_RUN_DAYS:
-                            for d in range(num_days - max_run):
-                                production_window = []
-                                for k in range(max_run + 1):
-                                    day_idx = d + k
-                                    if day_idx >= num_days:
+                        # Use a sliding window approach with consecutive production counting
+                        for d in range(num_days - max_run):
+                            # Count consecutive days of production starting from day d
+                            consecutive_days = []
+                            for k in range(max_run + 1):
+                                if d + k < num_days:
+                                    # Skip shutdown days - they break the run naturally
+                                    if line in shutdown_periods and (d + k) in shutdown_periods[line]:
                                         break
-                                    if line in shutdown_periods and day_idx in shutdown_periods[line]:
-                                        break
-                                    prod_var = get_is_producing_var(grade, line, day_idx)
+                                    prod_var = get_is_producing_var(grade, line, d + k)
                                     if prod_var is not None:
-                                        production_window.append(prod_var)
-                                
-                                if len(production_window) == max_run + 1:
-                                    model.Add(sum(production_window) <= max_run)
+                                        consecutive_days.append(prod_var)
+                            
+                            # If we have max_run+1 consecutive days available, prevent all being active
+                            if len(consecutive_days) == max_run + 1:
+                                model.Add(sum(consecutive_days) <= max_run)
                 
                 # Transition rules constraints
                 for line in lines:
@@ -1002,29 +1003,38 @@ if uploaded_file:
                     for d in range(num_days):
                         objective += stockout_penalty * stockout_vars[(grade, d)]
 
-                # TRANSITION PENALTIES AND CONTINUITY BONUSES - RESTORED ORIGINAL LOGIC
+                # TRANSITION PENALTIES AND CONTINUITY BONUSES - FIXED WITH KEY CHECKS
                 for line in lines:
                     for d in range(num_days - 1):
-                        transition_vars = []
                         for grade1 in grades:
                             if line not in allowed_lines[grade1]:
                                 continue
                             for grade2 in grades:
                                 if line not in allowed_lines[grade2] or grade1 == grade2:
                                     continue
+                                # Check transition rules
                                 if transition_rules.get(line) and grade1 in transition_rules[line] and grade2 not in transition_rules[line][grade1]:
                                     continue
-                                trans_var = model.NewBoolVar(f'trans_{line}_{d}_{grade1}_to_{grade2}')
-                                model.AddBoolAnd([is_producing[(grade1, line, d)], is_producing[(grade2, line, d + 1)]]).OnlyEnforceIf(trans_var)
-                                model.Add(trans_var == 0).OnlyEnforceIf(is_producing[(grade1, line, d)].Not())
-                                model.Add(trans_var == 0).OnlyEnforceIf(is_producing[(grade2, line, d + 1)].Not())
-                                transition_vars.append(trans_var)
-                                objective += transition_penalty * trans_var
+                                
+                                # Check if both variables exist
+                                key1 = (grade1, line, d)
+                                key2 = (grade2, line, d + 1)
+                                if key1 in is_producing and key2 in is_producing:
+                                    trans_var = model.NewBoolVar(f'trans_{line}_{d}_{grade1}_to_{grade2}')
+                                    model.AddBoolAnd([is_producing[key1], is_producing[key2]]).OnlyEnforceIf(trans_var)
+                                    model.Add(trans_var == 0).OnlyEnforceIf(is_producing[key1].Not())
+                                    model.Add(trans_var == 0).OnlyEnforceIf(is_producing[key2].Not())
+                                    objective += transition_penalty * trans_var
 
+                        # Continuity bonuses
                         for grade in grades:
-                            if line in allowed_lines[grade]:
+                            if line not in allowed_lines[grade]:
+                                continue
+                            key1 = (grade, line, d)
+                            key2 = (grade, line, d + 1)
+                            if key1 in is_producing and key2 in is_producing:
                                 continuity = model.NewBoolVar(f'continuity_{line}_{d}_{grade}')
-                                model.AddBoolAnd([is_producing[(grade, line, d)], is_producing[(grade, line, d + 1)]]).OnlyEnforceIf(continuity)
+                                model.AddBoolAnd([is_producing[key1], is_producing[key2]]).OnlyEnforceIf(continuity)
                                 objective += -continuity_bonus * continuity
 
                 model.Minimize(objective)
