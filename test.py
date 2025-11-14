@@ -1,5 +1,5 @@
 # test.py
-# Fintech-style UI redesign (Stripe-like) — UI only. Solver & visualizations unchanged.
+# Material 3 Tonal Sandstone UI (E2-B) — UI-only redesign, solver & visualizations unchanged
 import streamlit as st
 import pandas as pd
 from ortools.sat.python import cp_model
@@ -91,7 +91,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# session state keys used by the app (initialize if missing)
+# Initialize session state keys used
 if 'current_step' not in st.session_state:
     st.session_state.current_step = 0
 if 'solutions' not in st.session_state:
@@ -100,202 +100,188 @@ if 'best_solution' not in st.session_state:
     st.session_state.best_solution = None
 
 # ---------------------------
-# Stripe-style CSS (Fintech dashboard)
-# - Minimal, structured, ample whitespace
-# - Neutral surfaces, subtle borders, crisp typography
+# Material 3 Tonal Sandstone CSS (E2-B)
+# design tokens, tonal surfaces, soft rounded cards, subtle elevation
 # ---------------------------
 st.markdown("""
 <style>
-/* Design tokens */
-:root {
-  --bg: #f7fafc;
-  --surface: #ffffff;
-  --muted: #68707d;
-  --text: #0b1220;
-  --primary: #2563eb; /* blue-600 */
-  --accent: #6d28d9;  /* purple-700 */
-  --danger: #ef4444;
-  --success: #10b981;
-  --border: rgba(11,18,32,0.06);
+:root{
+  --md-surface: #FBF8FD; /* soft off-white */
+  --md-surface-variant: #F3EDF7; /* container */
+  --md-primary: #6750A4; /* MD3 muted purple */
+  --md-on-primary: #FFFFFF;
+  --md-secondary: #8A6FC0;
+  --md-outline: rgba(11,13,21,0.06);
+  --md-text: #0B1220;
+  --md-muted: #6B6B75;
+  --md-danger: #B00020;
+  --md-success: #026A4A;
+  --md-radius: 12px;
+  --md-radius-sm: 8px;
 }
 
-/* App background & base font */
+/* Base layout */
 .reportview-container, .main .block-container {
-  background: var(--bg);
-  color: var(--text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background: var(--md-surface);
+  color: var(--md-text);
+  font-family: Inter, "Google Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  padding-top: 18px;
 }
 
-/* Header: left aligned brand, small action area on right */
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 18px 22px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.9), rgba(255,255,255,0.9));
-  border-bottom: 1px solid var(--border);
+/* App header - tonal bar */
+.m3-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:16px 20px;
+  border-radius: var(--md-radius);
+  background: linear-gradient(180deg, var(--md-surface-variant), #FBF7FE);
+  border: 1px solid var(--md-outline);
   margin-bottom: 18px;
+  box-shadow: 0 8px 24px rgba(103,80,164,0.06);
 }
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.m3-brand {
+  display:flex;
+  align-items:center;
+  gap:12px;
 }
-.logo {
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  color: white;
-  height: 42px;
-  width: 42px;
-  border-radius: 8px;
+.m3-logo {
+  width:46px;
+  height:46px;
+  border-radius:10px;
   display:flex;
   align-items:center;
   justify-content:center;
   font-weight:800;
-  box-shadow: 0 6px 18px rgba(37,99,235,0.08);
+  color:var(--md-on-primary);
+  background: linear-gradient(135deg, var(--md-primary), var(--md-secondary));
+  box-shadow: 0 8px 20px rgba(103,80,164,0.08);
   font-size:18px;
 }
-.title {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
+.m3-title {
+  font-size:18px;
+  font-weight:800;
+  line-height:1;
 }
-.subtitle {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 2px;
+.m3-sub {
+  font-size:12px;
+  color:var(--md-muted);
 }
 
-/* Action area */
-.header-actions {
-  display:flex;
-  align-items:center;
-  gap: 10px;
-}
-.kpi {
-  text-align: right;
-  font-weight:700;
-  font-size: 14px;
-}
-.kpi-sub { font-size:12px; color:var(--muted); font-weight:600; }
+/* Header right area */
+.m3-header-right { text-align:right; }
+.m3-kpi { font-weight:700; color:var(--md-text); font-size:13px; }
+.m3-kpi-sub { font-size:12px; color:var(--md-muted); }
 
-/* Sidebar - full height column look */
+/* Sidebar (tonal card) */
 [data-testid="stSidebar"] {
-  background: var(--surface);
-  padding: 18px 16px 24px 16px;
-  border-right: 1px solid var(--border);
+  background: linear-gradient(180deg, #FFFFFF, var(--md-surface-variant));
+  border-right: 1px solid var(--md-outline);
+  padding: 18px 14px 22px 14px;
   min-width: 320px;
-  box-shadow: none;
 }
 
-/* Sidebar groups */
-.sidebar-group {
-  border: 1px solid var(--border);
-  background: linear-gradient(180deg, #ffffff, #ffffff);
-  padding: 14px;
-  border-radius: 10px;
+/* Sidebar groups as material cards */
+.sidebar-card {
+  background: #fff;
+  border-radius: var(--md-radius-sm);
+  border: 1px solid var(--md-outline);
+  padding: 12px;
   margin-bottom: 12px;
+  box-shadow: 0 6px 18px rgba(11,13,21,0.02);
 }
 
-/* Buttons */
-.stButton>button {
-  background: var(--primary);
-  color: white;
-  border-radius: 8px;
-  padding: 0.6rem 12px;
-  border: none;
-  font-weight:700;
-  box-shadow: 0 6px 18px rgba(37,99,235,0.07);
-}
-.stButton>button:hover { transform: translateY(-2px); }
-
-/* Cards and sections */
+/* Section panel */
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: #fff;
+  border-radius: var(--md-radius);
+  border: 1px solid var(--md-outline);
   padding: 16px;
-  box-shadow: 0 6px 20px rgba(11,18,32,0.02);
   margin-bottom: 16px;
+  box-shadow: 0 8px 24px rgba(11,13,21,0.02);
 }
 
-/* Section titles */
-.h2 {
-  font-size: 15px;
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: var(--text);
-}
+/* Titles */
+.m3-h1 { font-size:16px; font-weight:800; margin-bottom:8px; }
+.m3-h2 { font-size:14px; font-weight:700; margin-bottom:10px; color:var(--md-text); }
 
-/* Metric tiles (inline) */
+/* Metrics row */
 .metrics {
   display:flex;
   gap:12px;
   align-items:center;
-  margin-bottom: 12px;
+  margin-bottom:12px;
+  flex-wrap:wrap;
 }
-.metric-tile {
-  background: linear-gradient(180deg,#fff,#fff);
-  border: 1px solid var(--border);
-  padding: 10px 12px;
-  border-radius: 8px;
-  min-width: 140px;
+.metric {
+  background: linear-gradient(180deg, #fff, #fff);
+  border: 1px solid var(--md-outline);
+  padding:10px 12px;
+  border-radius:10px;
+  min-width:150px;
 }
-.metric-label { color: var(--muted); font-size: 12px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; }
-.metric-value { font-size:18px; font-weight:800; margin-top:6px; }
+.metric .label { font-size:11px; color:var(--md-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.6px; }
+.metric .value { font-size:18px; font-weight:800; margin-top:6px; color:var(--md-text); }
 
-/* DataFrames look */
-.dataframe { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
-tbody tr:nth-child(odd) td { background: #ffffff; }
-tbody tr:nth-child(even) td { background: #fbfcfe; }
-
-/* Tabs */
-.stTabs [data-baseweb="tab-list"] {
-  gap: 8px;
-  background-color: transparent;
-  padding: 6px;
+/* Buttons */
+.stButton>button {
+  background: var(--md-primary);
+  color: var(--md-on-primary);
+  border-radius: 10px;
+  padding: 0.6rem 12px;
+  border: none;
+  font-weight:700;
+  box-shadow: 0 10px 30px rgba(103,80,164,0.08);
 }
+.stButton>button:hover { transform: translateY(-2px); }
+
+/* Tabs - Material-style */
+.stTabs [data-baseweb="tab-list"] { gap:8px; margin-bottom:10px; }
 .stTabs [data-baseweb="tab"] {
-  background-color: #fff;
+  background: #fff;
   border-radius: 999px;
   padding: 8px 14px;
   font-weight:700;
-  border: 1px solid var(--border);
+  border: 1px solid var(--md-outline);
 }
 .stTabs [aria-selected="true"] {
-  background: linear-gradient(90deg, var(--primary), var(--accent));
-  color: #fff !important;
-  box-shadow: 0 6px 18px rgba(37,99,235,0.08);
+  background: linear-gradient(90deg, var(--md-primary), var(--md-secondary));
+  color: white !important;
+  box-shadow: 0 8px 20px rgba(103,80,164,0.08);
 }
 
+/* Dataframe visual */
+.dataframe { border-radius: 10px; overflow: hidden; border: 1px solid var(--md-outline); }
+tbody tr:nth-child(odd) td { background: #fff; }
+tbody tr:nth-child(even) td { background: #FBF8FF; }
+
 /* Footer */
-.app-footer { margin-top: 18px; text-align:center; color:var(--muted); font-size:13px; }
+.m3-footer { margin-top: 18px; text-align:center; color:var(--md-muted); font-size:13px; }
 
 /* Responsive */
-@media (max-width: 900px) {
-  [data-testid="stSidebar"] { min-width: 100% !important; border-right: none; border-bottom: 1px solid var(--border); }
+@media (max-width:900px){
+  [data-testid="stSidebar"] { min-width: 100% !important; border-right:none; border-bottom:1px solid var(--md-outline); }
   .metrics { flex-direction: column; align-items:flex-start; }
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------
-# Header (Stripe-style)
+# Header (Material 3 Tonal Sandstone)
 # ---------------------------
 st.markdown("""
-<div class="app-header">
-  <div class="brand">
-    <div class="logo">PP</div>
+<div class="m3-header">
+  <div class="m3-brand">
+    <div class="m3-logo">PP</div>
     <div>
-      <div class="title">Polymer Production Scheduler</div>
-      <div class="subtitle">Shutdown-aware multi-plant optimization</div>
+      <div class="m3-title">Polymer Production Scheduler</div>
+      <div class="m3-sub">Tonal Sandstone • Material 3 redesign • Solver unchanged</div>
     </div>
   </div>
-  <div class="header-actions">
-    <div style="text-align:right;">
-      <div class="kpi">UI: Fintech Redesign</div>
-      <div class="kpi-sub">Solver unchanged</div>
-    </div>
+  <div class="m3-header-right">
+    <div class="m3-kpi">UI theme: Material 3 Tonal Sandstone</div>
+    <div class="m3-kpi-sub">Production & inventory visuals untouched</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -378,7 +364,7 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
 
         self.solutions.append(solution)
 
-        # FIXED: Consistent transition counting using day indices
+        # Consistent transition counting using day indices
         transition_count_per_line = {line: 0 for line in self.lines}
         total_transitions = 0
 
@@ -400,7 +386,6 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
                         transition_count_per_line[line] += 1
                         total_transitions += 1
                     last_grade = current_grade
-                # Note: Don't reset last_grade if no production - this is correct for shutdown handling
 
         solution['transitions'] = {
             'per_line': transition_count_per_line,
@@ -411,10 +396,10 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
         return len(self.solutions)
 
 # ---------------------------
-# Sidebar: file upload & parameters (re-styled containers only)
+# Sidebar: file upload & parameters (Material 3 cards)
 # ---------------------------
 with st.sidebar:
-    st.markdown("<div class='sidebar-group'>", unsafe_allow_html=True)
+    st.markdown("<div class='sidebar-card'>", unsafe_allow_html=True)
     st.markdown("<div style='font-weight:700; margin-bottom:8px;'>📥 Data</div>", unsafe_allow_html=True)
     uploaded_file = st.file_uploader(
         "Upload Excel File", 
@@ -423,7 +408,7 @@ with st.sidebar:
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='sidebar-group'>", unsafe_allow_html=True)
+    st.markdown("<div class='sidebar-card'>", unsafe_allow_html=True)
     st.markdown("<div style='font-weight:700; margin-bottom:8px;'>⚙️ Optimization Parameters</div>", unsafe_allow_html=True)
 
     if uploaded_file:
@@ -470,26 +455,24 @@ with st.sidebar:
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("<div style='padding:4px 0; text-align:center;'>", unsafe_allow_html=True)
+        st.markdown("<div style='padding:6px 0; text-align:center;'>", unsafe_allow_html=True)
         st.button("🎯 Run Production Optimization", type="primary", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
     else:
-        # Minimal guidance when file not uploaded
-        st.markdown("<div style='color:var(--muted); font-size:13px;'>Upload your Excel file to enable parameters and run optimization.</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:var(--md-muted); font-size:13px;'>Upload your Excel file to enable parameters and run optimization.</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------
-# Main body — same workflow and logic as original file
-# (I kept solver, model, and all plotting code the same; only UI wrappers and classes changed)
+# Main app body (same workflow and logic; only UI wrappers changed)
 # ---------------------------
 if uploaded_file:
     try:
         uploaded_file.seek(0)
         excel_file = io.BytesIO(uploaded_file.read())
         
-        # Data preview area
+        # Data preview
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
-        st.markdown("<div class='h2'>📈 Data preview & validation</div>", unsafe_allow_html=True)
+        st.markdown("<div class='m3-h2'>📈 Data Preview & Validation</div>", unsafe_allow_html=True)
         
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -543,9 +526,9 @@ if uploaded_file:
         
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Shutdown info (kept logic)
+        # Shutdown info
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
-        st.markdown("<div class='h2'>🔧 Shutdowns</div>", unsafe_allow_html=True)
+        st.markdown("<div class='m3-h2'>🔧 Shutdowns</div>", unsafe_allow_html=True)
         shutdown_found = False
         for index, row in plant_df.iterrows():
             plant = row['Plant']
@@ -570,7 +553,7 @@ if uploaded_file:
             st.info("ℹ️ No plant shutdowns scheduled")
         st.markdown("</div>", unsafe_allow_html=True)
         
-        # Transition matrices (unchanged behavior)
+        # Transition matrices
         transition_dfs = {}
         for i in range(len(plant_df)):
             plant_name = plant_df['Plant'].iloc[i]
@@ -599,7 +582,7 @@ if uploaded_file:
 
         st.markdown("---")
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
-        st.markdown("<div class='h2'>Run Optimization</div>", unsafe_allow_html=True)
+        st.markdown("<div class='m3-h2'>Run Optimization</div>", unsafe_allow_html=True)
 
         if st.button("Run Optimization", type="primary", use_container_width=False):
             # Keep process & logic identical
@@ -615,7 +598,7 @@ if uploaded_file:
                 st.session_state.best_solution = None
 
             time.sleep(0.7)
-            status_text.markdown('<div style="padding:8px; border-radius:8px; background:#f1f5f9; color:#0b1220">📄 Preprocessing data...</div>', unsafe_allow_html=True)
+            status_text.markdown('<div style="padding:8px; border-radius:8px; background:#FBF8FF; color:var(--md-text)">📄 Preprocessing data...</div>', unsafe_allow_html=True)
             progress_bar.progress(10)
 
             time.sleep(1.2)
@@ -709,7 +692,7 @@ if uploaded_file:
                         else:
                             force_start_date[grade_plant_key] = None
                         
-                        # FIXED: Improved Rerun Allowed parsing
+                        # Rerun Allowed parsing
                         rerun_val = row['Rerun Allowed']
                         if pd.notna(rerun_val):
                             val_str = str(rerun_val).strip().lower()
@@ -739,7 +722,7 @@ if uploaded_file:
                 st.error(f"Traceback: {traceback.format_exc()}")
                 st.stop()
             
-            # Process demand data (unchanged)
+            # Process demand data
             demand_data = {}
             dates = sorted(list(set(demand_df.iloc[:, 0].dt.date.tolist())))
             num_days = len(dates)
@@ -780,7 +763,7 @@ if uploaded_file:
                     transition_rules[line] = None
             
             progress_bar.progress(30)
-            status_text.markdown('<div style="padding:8px; border-radius:8px; background:#f1f5f9; color:#0b1220">🔧 Building optimization model...</div>', unsafe_allow_html=True)
+            status_text.markdown('<div style="padding:8px; border-radius:8px; background:#FBF8FF; color:var(--md-text)">🔧 Building optimization model...</div>', unsafe_allow_html=True)
 
             time.sleep(1.6)
             
@@ -832,7 +815,7 @@ if uploaded_file:
                                     model.Add(is_producing[key] == 0)
                                     model.Add(production[key] == 0)
 
-            # FIXED: Document shutdown impact for validation
+            # Document shutdown impact for validation
             shutdown_demand = {}
             for grade in grades:
                 shutdown_demand[grade] = 0
@@ -877,7 +860,7 @@ if uploaded_file:
             
             objective = 0
             
-            # FIXED CORRECTED INVENTORY BALANCE with proper stockout handling
+            # Inventory balance & stockout handling
             for grade in grades:
                 model.Add(inventory_vars[(grade, 0)] == initial_inventory[grade])
             
@@ -889,31 +872,21 @@ if uploaded_file:
                     )
                     demand_today = demand_data[grade].get(dates[d], 0)
                     
-                    # Step 1: Calculate available inventory (expression, no variable needed)
-                    # available = inventory_vars[(grade, d)] + produced_today
-                    
-                    # Step 2: Determine what can be supplied
                     supplied = model.NewIntVar(0, 100000, f'supplied_{grade}_{d}')
                     model.Add(supplied <= inventory_vars[(grade, d)] + produced_today)
                     model.Add(supplied <= demand_today)
                     
-                    # Step 3: Calculate stockout based on unmet demand
                     model.Add(stockout_vars[(grade, d)] == demand_today - supplied)
-                    
-                    # Step 4: Calculate closing inventory
                     model.Add(inventory_vars[(grade, d + 1)] == inventory_vars[(grade, d)] + produced_today - supplied)
-                    
-                    # Ensure non-negativity
                     model.Add(inventory_vars[(grade, d + 1)] >= 0)
             
-            # Minimum inventory constraints (as soft constraints with penalties)
+            # Minimum inventory constraints (soft)
             for grade in grades:
                 for d in range(num_days):
                     if min_inventory[grade] > 0:
                         min_inv_value = int(min_inventory[grade])
                         inventory_tomorrow = inventory_vars[(grade, d + 1)]
                         
-                        # Create a deficit variable that is positive when below minimum
                         deficit = model.NewIntVar(0, 100000, f'deficit_{grade}_{d}')
                         model.Add(deficit >= min_inv_value - inventory_tomorrow)
                         model.Add(deficit >= 0)
@@ -936,7 +909,6 @@ if uploaded_file:
             
             for line in lines:
                 for d in range(num_days - buffer_days):
-                    # Skip shutdown days for full capacity requirement
                     if line in shutdown_periods and d in shutdown_periods[line]:
                         continue
                     production_vars = [
@@ -956,7 +928,7 @@ if uploaded_file:
                     if production_vars:
                         model.Add(sum(production_vars) <= capacities[line])
             
-            # Force Start Date per (grade, plant) combination
+            # Force start dates
             for grade_plant_key, start_date in force_start_date.items():
                 if start_date:
                     grade, plant = grade_plant_key
@@ -971,7 +943,7 @@ if uploaded_file:
                     except ValueError:
                         st.warning(f"⚠️ Force start date '{start_date.strftime('%d-%b-%y')}' for grade '{grade}' on plant '{plant}' not found in demand dates")
             
-            # Minimum & Maximum Run Days per (grade, plant) - account for shutdown interruptions
+            # Run day constraints and starts/ends
             is_start_vars = {}
             run_end_vars = {}
             
@@ -981,7 +953,6 @@ if uploaded_file:
                     min_run = min_run_days.get(grade_plant_key, 1)
                     max_run = max_run_days.get(grade_plant_key, 9999)
                     
-                    # Create start and end variables
                     for d in range(num_days):
                         is_start = model.NewBoolVar(f'start_{grade}_{line}_{d}')
                         is_start_vars[(grade, line, d)] = is_start
@@ -991,7 +962,6 @@ if uploaded_file:
                         
                         current_prod = get_is_producing_var(grade, line, d)
                         
-                        # Start definition: producing today but not yesterday (or today is day 0)
                         if d > 0:
                             prev_prod = get_is_producing_var(grade, line, d - 1)
                             if current_prod is not None and prev_prod is not None:
@@ -1002,7 +972,6 @@ if uploaded_file:
                                 model.Add(current_prod == 1).OnlyEnforceIf(is_start)
                                 model.Add(is_start == 1).OnlyEnforceIf(current_prod)
                         
-                        # End definition: producing today but not tomorrow (or today is last day)
                         if d < num_days - 1:
                             next_prod = get_is_producing_var(grade, line, d + 1)
                             if current_prod is not None and next_prod is not None:
@@ -1013,50 +982,41 @@ if uploaded_file:
                                 model.Add(current_prod == 1).OnlyEnforceIf(is_end)
                                 model.Add(is_end == 1).OnlyEnforceIf(current_prod)
             
-                    # MINIMUM RUN DAYS: If we start a run, it must continue for at least min_run days
-                    # (unless interrupted by shutdown)
+                    # Min run enforcement (respect shutdowns)
                     for d in range(num_days):
                         is_start = is_start_vars[(grade, line, d)]
                         
-                        # Check how many consecutive non-shutdown days we have from day d
                         max_possible_run = 0
                         for k in range(min_run):
                             if d + k < num_days:
-                                # Check if this day is a shutdown day
                                 if line in shutdown_periods and (d + k) in shutdown_periods[line]:
                                     break
                                 max_possible_run += 1
                         
-                        # Only enforce if we have enough consecutive days available
                         if max_possible_run >= min_run:
-                            # Force production for the next min_run days (if no shutdown)
                             for k in range(min_run):
                                 if d + k < num_days:
-                                    # Skip if this is a shutdown day
                                     if line in shutdown_periods and (d + k) in shutdown_periods[line]:
                                         continue
                                     future_prod = get_is_producing_var(grade, line, d + k)
                                     if future_prod is not None:
                                         model.Add(future_prod == 1).OnlyEnforceIf(is_start)
             
-                    # FIXED: MAXIMUM RUN DAYS - Single correct implementation
-                    # Use a sliding window approach with consecutive production counting
+                    # Max run sliding windows
                     for d in range(num_days - max_run):
-                        # Count consecutive days of production starting from day d
                         consecutive_days = []
                         for k in range(max_run + 1):
                             if d + k < num_days:
-                                # Skip shutdown days - they break the run naturally
                                 if line in shutdown_periods and (d + k) in shutdown_periods[line]:
                                     break
                                 prod_var = get_is_producing_var(grade, line, d + k)
                                 if prod_var is not None:
                                     consecutive_days.append(prod_var)
                         
-                        # If we have max_run+1 consecutive days available, prevent all being active
                         if len(consecutive_days) == max_run + 1:
                             model.Add(sum(consecutive_days) <= max_run)
             
+            # Transition rules
             for line in lines:
                 if transition_rules.get(line):
                     for d in range(num_days - 1):
@@ -1074,23 +1034,21 @@ if uploaded_file:
                                         if prev_var is not None and current_var is not None:
                                             model.Add(prev_var + current_var <= 1)
 
-            # Rerun Allowed Constraints
+            # Rerun allowed enforcement
             for grade in grades:
                 for line in allowed_lines[grade]:
                     grade_plant_key = (grade, line)
                     if not rerun_allowed.get(grade_plant_key, True):
-                        # If rerun not allowed, don't start multiple runs
                         starts = [is_start_vars[(grade, line, d)] for d in range(num_days) 
                                  if (grade, line, d) in is_start_vars]
                         if starts:
                             model.Add(sum(starts) <= 1)
 
-            # Stockout penalties in objective
+            # Objective: stockouts + transitions + continuity
             for grade in grades:
                 for d in range(num_days):
                     objective += stockout_penalty * stockout_vars[(grade, d)]
 
-            # Transition penalties and continuity bonuses
             for line in lines:
                 for d in range(num_days - 1):
                     transition_vars = []
@@ -1118,13 +1076,13 @@ if uploaded_file:
             model.Minimize(objective)
 
             progress_bar.progress(50)
-            status_text.markdown('<div style="padding:8px; border-radius:8px; background:#f1f5f9; color:#0b1220">⚡ Running optimization solver...</div>', unsafe_allow_html=True)
+            status_text.markdown('<div style="padding:8px; border-radius:8px; background:#FBF8FF; color:var(--md-text)">⚡ Running optimization solver...</div>', unsafe_allow_html=True)
 
             solver = cp_model.CpSolver()
             solver.parameters.max_time_in_seconds = time_limit_min * 60.0
             solver.parameters.num_search_workers = 8
-            solver.parameters.random_seed = 42  # FIXED: Add for repeatability
-            solver.parameters.log_search_progress = True  # Optional: for debugging
+            solver.parameters.random_seed = 42
+            solver.parameters.log_search_progress = True
             
             solution_callback = SolutionCallback(production, inventory_vars, stockout_vars, is_producing, grades, lines, dates, formatted_dates, num_days)
 
@@ -1135,46 +1093,46 @@ if uploaded_file:
             
             # Check solver status
             if status == cp_model.OPTIMAL:
-                status_text.markdown('<div style="padding:8px; border-radius:8px; background:#ecfdf5; color:#065f46">✅ Optimization completed optimally!</div>', unsafe_allow_html=True)
+                status_text.markdown('<div style="padding:8px; border-radius:8px; background:#EEF7F1; color:var(--md-success)">✅ Optimization completed optimally!</div>', unsafe_allow_html=True)
             elif status == cp_model.FEASIBLE:
-                status_text.markdown('<div style="padding:8px; border-radius:8px; background:#ecfdf5; color:#065f46">✅ Optimization completed with feasible solution!</div>', unsafe_allow_html=True)
+                status_text.markdown('<div style="padding:8px; border-radius:8px; background:#EEF7F1; color:var(--md-success)">✅ Optimization completed with feasible solution!</div>', unsafe_allow_html=True)
             else:
-                status_text.markdown('<div style="padding:8px; border-radius:8px; background:#fff7ed; color:#92400e">⚠️ Optimization ended without proven optimal solution.</div>', unsafe_allow_html=True)
+                status_text.markdown('<div style="padding:8px; border-radius:8px; background:#FFF4E6; color:var(--md-danger)">⚠️ Optimization ended without proven optimal solution.</div>', unsafe_allow_html=True)
 
             st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
             st.markdown("<div class='panel'>", unsafe_allow_html=True)
-            st.markdown("<div class='h2'>📈 Results</div>", unsafe_allow_html=True)
+            st.markdown("<div class='m3-h2'>📈 Results</div>", unsafe_allow_html=True)
 
             if solution_callback.num_solutions() > 0:
                 best_solution = solution_callback.solutions[-1]
 
-                # KPI row (Stripe-style minimal tiles)
+                # KPI row
                 st.markdown("<div class='metrics'>", unsafe_allow_html=True)
                 col1, col2, col3, col4 = st.columns([1,1,1,1])
                 with col1:
-                    st.markdown("<div class='metric-tile'>", unsafe_allow_html=True)
-                    st.markdown("<div class='metric-label'>Objective Value</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='metric-value'>{best_solution['objective']:,.0f}</div>", unsafe_allow_html=True)
+                    st.markdown("<div class='metric'>", unsafe_allow_html=True)
+                    st.markdown("<div class='label'>Objective Value</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='value'>{best_solution['objective']:,.0f}</div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
                 with col2:
-                    st.markdown("<div class='metric-tile'>", unsafe_allow_html=True)
-                    st.markdown("<div class='metric-label'>Total Transitions</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='metric-value'>{best_solution['transitions']['total']}</div>", unsafe_allow_html=True)
+                    st.markdown("<div class='metric'>", unsafe_allow_html=True)
+                    st.markdown("<div class='label'>Total Transitions</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='value'>{best_solution['transitions']['total']}</div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
                 with col3:
                     total_stockouts = sum(sum(best_solution['stockout'][g].values()) for g in grades)
-                    st.markdown("<div class='metric-tile'>", unsafe_allow_html=True)
-                    st.markdown("<div class='metric-label'>Total Stockouts</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='metric-value'>{total_stockouts:,.0f} MT</div>", unsafe_allow_html=True)
+                    st.markdown("<div class='metric'>", unsafe_allow_html=True)
+                    st.markdown("<div class='label'>Total Stockouts</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='value'>{total_stockouts:,.0f} MT</div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
                 with col4:
-                    st.markdown("<div class='metric-tile'>", unsafe_allow_html=True)
-                    st.markdown("<div class='metric-label'>Planning Horizon</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='metric-value'>{num_days} days</div>", unsafe_allow_html=True)
+                    st.markdown("<div class='metric'>", unsafe_allow_html=True)
+                    st.markdown("<div class='label'>Planning Horizon</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='value'>{num_days} days</div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-                # Tabs for production / summary / inventory (visualization code unchanged)
+                # Tabs - production/summary/inventory (visual code unchanged)
                 tab1, tab2, tab3 = st.tabs(["📅 Production Schedule", "📊 Summary", "📦 Inventory"])
                 
                 with tab1:
@@ -1513,7 +1471,6 @@ if uploaded_file:
                             showlegend=False
                         )
                         
-                        # Add annotations one by one with explicit parameters
                         for ann in annotations:
                             fig.add_annotation(
                                 x=ann['x'],
@@ -1560,18 +1517,18 @@ if uploaded_file:
         st.info("Please make sure your Excel file has the required sheets: 'Plant', 'Inventory', and 'Demand'")
 
 else:
-    # Landing page content (Stripe-style)
+    # Landing / help content (Material 3)
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    st.markdown("<div class='h2'>Welcome</div>", unsafe_allow_html=True)
+    st.markdown("<div class='m3-h2'>Welcome</div>", unsafe_allow_html=True)
     st.markdown("""
     <div style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap;">
       <div style="flex:1; min-width:260px;">
         <div style="font-weight:700; margin-bottom:6px;">Quick start</div>
-        <div style="color:#68707d;">Download the sample template, prepare Plant/Inventory/Demand sheets, upload and run the optimizer.</div>
+        <div style="color:var(--md-muted);">Download the sample template, prepare Plant/Inventory/Demand sheets, upload and run the optimizer.</div>
       </div>
       <div style="flex:1; min-width:260px;">
         <div style="font-weight:700; margin-bottom:6px;">What this tool does</div>
-        <ul style="margin:0; padding-left:16px; color:#68707d;">
+        <ul style="margin:0; padding-left:16px; color:var(--md-muted);">
           <li>Balance production across plants</li>
           <li>Respect run-lengths & transition rules</li>
           <li>Handle scheduled shutdowns</li>
@@ -1584,7 +1541,7 @@ else:
     sample_workbook = get_sample_workbook()
 
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    st.markdown("<div class='h2'>📥 Sample template</div>", unsafe_allow_html=True)
+    st.markdown("<div class='m3-h2'>📥 Sample template</div>", unsafe_allow_html=True)
 
     col1, col2 = st.columns([2,1])
     with col1:
@@ -1603,4 +1560,4 @@ else:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Footer
-st.markdown("<div class='app-footer'>Polymer Production Scheduler • Built with Streamlit • UI redesign: Fintech Dashboard</div>", unsafe_allow_html=True)
+st.markdown("<div class='m3-footer'>Polymer Production Scheduler • UI theme: Material 3 Tonal Sandstone (E2-B) • Solver & visualizations unchanged</div>", unsafe_allow_html=True)
