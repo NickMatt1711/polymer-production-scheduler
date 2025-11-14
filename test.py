@@ -790,7 +790,7 @@ if uploaded_file:
                 
                 objective = 0
                 
-                # IMPROVED INVENTORY BALANCE
+                # INVENTORY BALANCE - RESTORED ORIGINAL WORKING LOGIC
                 for grade in grades:
                     model.Add(inventory_vars[(grade, 0)] == initial_inventory[grade])
                 
@@ -802,43 +802,43 @@ if uploaded_file:
                         )
                         demand_today = demand_data[grade].get(dates[d], 0)
                         
-                        # Inventory balance with stockout handling
-                        # inventory[d+1] = inventory[d] + production - demand + stockout
-                        # This works because:
-                        # - When we can meet demand: stockout=0, inventory reduces normally
-                        # - When we can't meet demand: stockout>0, compensates to keep inventory>=0
-                        model.Add(
-                            inventory_vars[(grade, d + 1)] == 
-                            inventory_vars[(grade, d)] + produced_today - demand_today + stockout_vars[(grade, d)]
-                        )
+                        # Original working formulation with explicit supplied variable
+                        supplied = model.NewIntVar(0, MAX_STOCKOUT_BOUND, f'supplied_{grade}_{d}')
+                        model.Add(supplied <= inventory_vars[(grade, d)] + produced_today)
+                        model.Add(supplied <= demand_today)
+                        
+                        # Stockout is unmet demand
+                        model.Add(stockout_vars[(grade, d)] == demand_today - supplied)
+                        
+                        # Inventory balance
+                        model.Add(inventory_vars[(grade, d + 1)] == inventory_vars[(grade, d)] + produced_today - supplied)
                         
                         # Ensure non-negativity
-                        model.Add(stockout_vars[(grade, d)] >= 0)
                         model.Add(inventory_vars[(grade, d + 1)] >= 0)
                 
-                # Minimum inventory constraints - USE SOFT CONSTRAINTS TO AVOID INFEASIBILITY
-                min_inventory_deficit_vars = {}
+                # Minimum inventory constraints (as soft constraints with penalties)
                 for grade in grades:
                     for d in range(num_days):
                         if min_inventory[grade] > 0:
-                            deficit = model.NewIntVar(0, MAX_INVENTORY_BOUND, f'min_inv_deficit_{grade}_{d}')
-                            model.Add(deficit >= min_inventory[grade] - inventory_vars[(grade, d + 1)])
+                            min_inv_value = int(min_inventory[grade])
+                            inventory_tomorrow = inventory_vars[(grade, d + 1)]
+                            
+                            # Create a deficit variable that is positive when below minimum
+                            deficit = model.NewIntVar(0, MAX_STOCKOUT_BOUND, f'deficit_{grade}_{d}')
+                            model.Add(deficit >= min_inv_value - inventory_tomorrow)
                             model.Add(deficit >= 0)
-                            min_inventory_deficit_vars[(grade, d)] = deficit
-                            # Add to objective with penalty
-                            objective += stockout_penalty * 0.5 * deficit
+                            objective += stockout_penalty * deficit
                 
-                # Minimum Closing Inventory constraint - SOFT CONSTRAINT
+                # Minimum Closing Inventory constraint
                 for grade in grades:
                     closing_inventory = inventory_vars[(grade, num_days - buffer_days)]
                     min_closing = min_closing_inventory[grade]
                     
                     if min_closing > 0:
-                        closing_deficit = model.NewIntVar(0, MAX_INVENTORY_BOUND, f'closing_deficit_{grade}')
+                        closing_deficit = model.NewIntVar(0, MAX_STOCKOUT_BOUND, f'closing_deficit_{grade}')
                         model.Add(closing_deficit >= min_closing - closing_inventory)
                         model.Add(closing_deficit >= 0)
-                        # Higher penalty for closing inventory
-                        objective += stockout_penalty * 2 * closing_deficit
+                        objective += stockout_penalty * closing_deficit * 3  # Higher penalty for closing inventory
                 
                 # Maximum inventory constraints
                 for grade in grades:
