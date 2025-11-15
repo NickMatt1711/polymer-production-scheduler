@@ -705,13 +705,6 @@ elif st.session_state.step == 2:
         uploaded_file.seek(0)
         excel_file = io.BytesIO(uploaded_file.read())
         
-        st.markdown("""
-        <div class="material-card">
-            <div class="card-title">👁️ Data Preview & Validation</div>
-            <div class="card-subtitle">Review your uploaded data before optimization</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
         # Data preview in tabs
         tab1, tab2, tab3 = st.tabs(["🏭 Plant Data", "📦 Inventory Data", "📊 Demand Data"])
         
@@ -1449,7 +1442,7 @@ elif st.session_state.step == 3:
             # Performance metrics dashboard
             st.markdown("""
             <div class="material-card">
-                <div class="card-title">📊 Optimization Results</div>
+                <div text-align:centre;class="card-title">📊 Optimization Results</div>
                 <div class="card-subtitle">Key performance indicators from the optimal schedule</div>
             </div>
             """, unsafe_allow_html=True)
@@ -1500,13 +1493,7 @@ elif st.session_state.step == 3:
             
             # TAB 1: PRODUCTION SCHEDULE
             with tab1:
-                st.markdown("""
-                <div class="material-card">
-                    <div class="card-title">📅 Visual Production Schedule</div>
-                    <div class="card-subtitle">Interactive Gantt charts showing grade assignments by plant</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
+                                
                 sorted_grades = sorted(grades)
                 base_colors = px.colors.qualitative.Vivid
                 grade_color_map = {grade: base_colors[i % len(base_colors)] for i, grade in enumerate(sorted_grades)}
@@ -1638,73 +1625,63 @@ elif st.session_state.step == 3:
             
             # TAB 2: SUMMARY ANALYTICS
             with tab2:
-                st.markdown("""
-                <div class="material-card">
-                    <div class="card-title">📊 Production Summary Analytics</div>
-                    <div class="card-subtitle">Aggregated production volumes and transition details</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                production_totals = {}
-                grade_totals = {}
-                plant_totals = {line: 0 for line in lines}
-                stockout_totals = {}
-                
-                for grade in grades:
-                    production_totals[grade] = {}
-                    grade_totals[grade] = 0
-                    stockout_totals[grade] = 0
-                    
-                    for line in lines:
-                        total_prod = 0
-                        for d in range(num_days):
-                            key = (grade, line, d)
-                            if key in production:
-                                total_prod += solver.Value(production[key])
-                        production_totals[grade][line] = total_prod
-                        grade_totals[grade] += total_prod
-                        plant_totals[line] += total_prod
-                    
-                    for d in range(num_days):
-                        key = (grade, d)
-                        if key in stockout_vars:
-                            stockout_totals[grade] += solver.Value(stockout_vars[key])
-                
-                total_prod_data = []
-                for grade in grades:
-                    row = {'Grade': grade}
-                    for line in lines:
-                        row[line] = production_totals[grade][line]
-                    row['Total Produced'] = grade_totals[grade]
-                    row['Total Stockout'] = stockout_totals[grade]
-                    total_prod_data.append(row)
-                
-                totals_row = {'Grade': 'TOTAL'}
-                for line in lines:
-                    totals_row[line] = plant_totals[line]
-                totals_row['Total Produced'] = sum(plant_totals.values())
-                totals_row['Total Stockout'] = sum(stockout_totals.values())
-                total_prod_data.append(totals_row)
-                
-                total_prod_df = pd.DataFrame(total_prod_data)
-                
-                st.dataframe(
-                    total_prod_df.style.apply(
-                        lambda x: ['background-color: #f5f5f5; font-weight: bold' if x.name == len(total_prod_df) - 1 else '' for i in x],
-                        axis=1
-                    ),
-                    use_container_width=True,
-                    hide_index=True
-                )
-                
-                st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-                
-                # Transition details
-                st.markdown("#### 🔄 Transition Analysis by Plant")
-                
-                col1, col2 = st.columns([1, 1])
+
+                col1, col2 = st.columns([2, 1])
                 
                 with col1:
+                    production_totals = {}
+                    grade_totals = {}
+                    plant_totals = {line: 0 for line in lines}
+                    stockout_totals = {}
+                    
+                    for grade in grades:
+                        production_totals[grade] = {}
+                        grade_totals[grade] = 0
+                        stockout_totals[grade] = 0
+                        
+                        for line in lines:
+                            total_prod = 0
+                            for d in range(num_days):
+                                key = (grade, line, d)
+                                if key in production:
+                                    total_prod += solver.Value(production[key])
+                            production_totals[grade][line] = total_prod
+                            grade_totals[grade] += total_prod
+                            plant_totals[line] += total_prod
+                        
+                        for d in range(num_days):
+                            key = (grade, d)
+                            if key in stockout_vars:
+                                stockout_totals[grade] += solver.Value(stockout_vars[key])
+                    
+                    total_prod_data = []
+                    for grade in grades:
+                        row = {'Grade': grade}
+                        for line in lines:
+                            row[line] = production_totals[grade][line]
+                        row['Total Produced'] = grade_totals[grade]
+                        row['Total Stockout'] = stockout_totals[grade]
+                        total_prod_data.append(row)
+                    
+                    totals_row = {'Grade': 'TOTAL'}
+                    for line in lines:
+                        totals_row[line] = plant_totals[line]
+                    totals_row['Total Produced'] = sum(plant_totals.values())
+                    totals_row['Total Stockout'] = sum(stockout_totals.values())
+                    total_prod_data.append(totals_row)
+                    
+                    total_prod_df = pd.DataFrame(total_prod_data)
+                    
+                    st.dataframe(
+                        total_prod_df.style.apply(
+                            lambda x: ['background-color: #f5f5f5; font-weight: bold' if x.name == len(total_prod_df) - 1 else '' for i in x],
+                            axis=1
+                        ),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                
+                with col2:
                     transition_data = []
                     for line, count in best_solution['transitions']['per_line'].items():
                         transition_data.append({
@@ -1714,33 +1691,10 @@ elif st.session_state.step == 3:
                     
                     transition_df = pd.DataFrame(transition_data)
                     st.dataframe(transition_df, use_container_width=True, hide_index=True)
-                
-                with col2:
-                    if transition_df['Transitions'].sum() > 0:
-                        fig = px.bar(
-                            transition_df,
-                            x="Plant",
-                            y="Transitions",
-                            color="Transitions",
-                            color_continuous_scale="Purples"
-                        )
-                        fig.update_layout(
-                            height=250,
-                            showlegend=False,
-                            plot_bgcolor="white",
-                            margin=dict(l=40, r=40, t=40, b=40)
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
             
             # TAB 3: INVENTORY TRENDS
             with tab3:
-                st.markdown("""
-                <div class="material-card">
-                    <div class="card-title">📦 Inventory Trajectory Analysis</div>
-                    <div class="card-subtitle">Track inventory levels with min/max boundaries and key events</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
+                                
                 last_actual_day = num_days - buffer_days - 1
 
                 for grade in sorted_grades:
