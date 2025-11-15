@@ -371,7 +371,7 @@ with tab_params:
         st.session_state.current_step = 0
         st.session_state.solutions = []
         st.session_state.best_solution = None
-        st.experimental_rerun()
+        st.rerun()
 
     # Run optimization when requested
     if run_button:
@@ -988,7 +988,7 @@ with tab_params:
             # Move user to Results tab programmatically by setting step and rendering results (they can manually click too)
             st.session_state.current_step = 3
             st.success(f"Solver finished in {elapsed:.1f}s. Go to the Results tab to view outputs.")
-            st.experimental_rerun()
+            st.rerun()
 
 # ---------- RESULTS ----------
 with tab_results:
