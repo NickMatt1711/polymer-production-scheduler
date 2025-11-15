@@ -284,6 +284,22 @@ st.markdown("""
     .stButton > button:active {
         transform: translateY(0);
     }
+
+    /* Download Button - Material Design */
+    [data-testid="stDownloadButton"] {
+        background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+        border: 2px dashed #667eea;
+        border-radius: 16px;
+        padding: 1rem 1rem;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    
+    [data-testid="stDownloadButton"]:hover {
+        border-color: #764ba2;
+        background: linear-gradient(135deg, #f0f4ff 0%, #e3e9f7 100%);
+        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.15);
+    }
     
     /* File uploader - Material Design */
     [data-testid="stFileUploader"] {
