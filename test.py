@@ -7,6 +7,7 @@ import base64
 from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
+from ortools.sat.python import cp_model
 
 # === APP CONFIGURATION ===
 st.set_page_config(
@@ -214,13 +215,15 @@ def create_demo_file():
     # Plant data
     plant_data = pd.DataFrame({
         'Plant': ['Plant1', 'Plant2', 'Plant3'],
-        'Capacity': [1000, 1500, 1200],
-        'Material': ['GradeA', 'GradeB', 'GradeA'],
-        'Status': ['Active', 'Active', 'Maintenance']
+        'Capacity per day': [1000, 1500, 1200],
+        'Material Running': ['GradeA', 'GradeB', 'GradeA'],
+        'Expected Run Days': [5, 3, 4],
+        'Shutdown Start Date': [None, '2024-01-15', None],
+        'Shutdown End Date': [None, '2024-01-18', None]
     })
     
     # Demand data
-    dates = pd.date_range(start='2024-01-01', end='2024-01-10', freq='D')
+    dates = pd.date_range(start='2024-01-01', end='2024-01-20', freq='D')
     demand_data = pd.DataFrame({
         'Date': dates,
         'GradeA': np.random.randint(500, 2000, len(dates)),
@@ -230,10 +233,16 @@ def create_demo_file():
     
     # Inventory data
     inventory_data = pd.DataFrame({
-        'Grade': ['GradeA', 'GradeB', 'GradeC'],
-        'Opening_Inventory': [5000, 3000, 2000],
-        'Min_Inventory': [1000, 800, 500],
-        'Max_Inventory': [8000, 6000, 4000]
+        'Grade Name': ['GradeA', 'GradeB', 'GradeC', 'GradeA', 'GradeB'],
+        'Opening Inventory': [5000, 3000, 2000, 5000, 3000],
+        'Min. Inventory': [1000, 800, 500, 1000, 800],
+        'Max. Inventory': [8000, 6000, 4000, 8000, 6000],
+        'Min. Run Days': [3, 2, 2, 3, 2],
+        'Max. Run Days': [10, 8, 6, 10, 8],
+        'Force Start Date': [None, None, None, '2024-01-05', None],
+        'Lines': ['Plant1,Plant3', 'Plant2', 'Plant2,Plant3', 'Plant2', 'Plant1'],
+        'Rerun Allowed': ['Yes', 'Yes', 'No', 'Yes', 'Yes'],
+        'Min. Closing Inventory': [2000, 1500, 1000, 2000, 1500]
     })
     
     # Create Excel file in memory
@@ -247,15 +256,335 @@ def create_demo_file():
     return output
 
 # === BEGIN USER SOLVER CODE - DO NOT MODIFY THIS HEADER ===
-# Paste your solver functions here. Expected signature:
-#   def run_solver(df: pandas.DataFrame, params: dict) -> dict
-# Expected return keys: tables (dict of DataFrames), plots (dict of plotly.Figure), logs (str)
-# === END USER SOLVER CODE ===
+class ProductionOptimizer:
+    def __init__(self, data, params):
+        self.data = data
+        self.params = params
+        self.model = cp_model.CpModel()
+        self.solver = cp_model.CpSolver()
+        
+    def preprocess_data(self):
+        """Extract and preprocess data from uploaded sheets"""
+        try:
+            # Extract plant data
+            plant_df = self.data['Plant']
+            self.plants = list(plant_df['Plant'])
+            self.capacities = {row['Plant']: row['Capacity per day'] for _, row in plant_df.iterrows()}
+            
+            # Extract demand data
+            demand_df = self.data['Demand']
+            self.dates = sorted(list(set(demand_df.iloc[:, 0].dt.date.tolist())))
+            self.num_days = len(self.dates)
+            self.grades = [col for col in demand_df.columns if col != demand_df.columns[0]]
+            
+            # Process demand data
+            self.demand_data = {}
+            for grade in self.grades:
+                if grade in demand_df.columns:
+                    self.demand_data[grade] = {
+                        demand_df.iloc[i, 0].date(): demand_df[grade].iloc[i] 
+                        for i in range(len(demand_df))
+                    }
+            
+            # Process inventory data
+            inventory_df = self.data['Inventory']
+            self.initial_inventory = {}
+            self.min_inventory = {}
+            self.max_inventory = {}
+            self.min_run_days = {}
+            self.max_run_days = {}
+            self.allowed_plants = {grade: [] for grade in self.grades}
+            
+            for _, row in inventory_df.iterrows():
+                grade = row['Grade Name']
+                
+                # Global inventory parameters
+                if grade not in self.initial_inventory:
+                    self.initial_inventory[grade] = row['Opening Inventory'] if pd.notna(row['Opening Inventory']) else 0
+                    self.min_inventory[grade] = row['Min. Inventory'] if pd.notna(row['Min. Inventory']) else 0
+                    self.max_inventory[grade] = row['Max. Inventory'] if pd.notna(row['Max. Inventory']) else 1000000
+                
+                # Plant-specific parameters
+                lines_value = row['Lines']
+                if pd.notna(lines_value) and lines_value != '':
+                    plants_for_grade = [x.strip() for x in str(lines_value).split(',')]
+                else:
+                    plants_for_grade = self.plants
+                
+                for plant in plants_for_grade:
+                    if plant not in self.allowed_plants[grade]:
+                        self.allowed_plants[grade].append(plant)
+                    
+                    key = (grade, plant)
+                    self.min_run_days[key] = int(row['Min. Run Days']) if pd.notna(row['Min. Run Days']) else 1
+                    self.max_run_days[key] = int(row['Max. Run Days']) if pd.notna(row['Max. Run Days']) else 9999
+            
+            return True
+            
+        except Exception as e:
+            st.error(f"Data preprocessing error: {str(e)}")
+            return False
+    
+    def build_model(self):
+        """Build the optimization model"""
+        # Decision variables
+        self.is_producing = {}
+        self.production = {}
+        self.inventory_vars = {}
+        self.stockout_vars = {}
+        
+        # Create production variables
+        for grade in self.grades:
+            for plant in self.allowed_plants[grade]:
+                for d in range(self.num_days):
+                    key = (grade, plant, d)
+                    self.is_producing[key] = self.model.NewBoolVar(f'is_producing_{grade}_{plant}_{d}')
+                    self.production[key] = self.model.NewIntVar(0, self.capacities[plant], f'production_{grade}_{plant}_{d}')
+                    
+                    # Link production to binary variable
+                    self.model.Add(self.production[key] == self.capacities[plant]).OnlyEnforceIf(self.is_producing[key])
+                    self.model.Add(self.production[key] == 0).OnlyEnforceIf(self.is_producing[key].Not())
+        
+        # Create inventory variables
+        for grade in self.grades:
+            for d in range(self.num_days + 1):
+                self.inventory_vars[(grade, d)] = self.model.NewIntVar(0, 1000000, f'inventory_{grade}_{d}')
+        
+        # Create stockout variables
+        for grade in self.grades:
+            for d in range(self.num_days):
+                self.stockout_vars[(grade, d)] = self.model.NewIntVar(0, 1000000, f'stockout_{grade}_{d}')
+        
+        # Constraints
+        self._add_constraints()
+        
+        # Objective function
+        self._set_objective()
+    
+    def _add_constraints(self):
+        """Add constraints to the model"""
+        # One plant produces at most one grade per day
+        for plant in self.plants:
+            for d in range(self.num_days):
+                producing_vars = []
+                for grade in self.grades:
+                    if plant in self.allowed_plants[grade]:
+                        key = (grade, plant, d)
+                        if key in self.is_producing:
+                            producing_vars.append(self.is_producing[key])
+                if producing_vars:
+                    self.model.Add(sum(producing_vars) <= 1)
+        
+        # Inventory balance constraints
+        for grade in self.grades:
+            # Initial inventory
+            self.model.Add(self.inventory_vars[(grade, 0)] == self.initial_inventory[grade])
+            
+            for d in range(self.num_days):
+                # Total production for this grade on day d
+                total_production = sum(
+                    self.production[(grade, plant, d)] 
+                    for plant in self.allowed_plants[grade] 
+                    if (grade, plant, d) in self.production
+                )
+                
+                # Demand for this grade on day d
+                demand_today = self.demand_data[grade].get(self.dates[d], 0)
+                
+                # Inventory balance: inventory[d+1] = inventory[d] + production - demand + stockout
+                self.model.Add(
+                    self.inventory_vars[(grade, d + 1)] == 
+                    self.inventory_vars[(grade, d)] + total_production - demand_today + self.stockout_vars[(grade, d)]
+                )
+                
+                # Inventory bounds
+                self.model.Add(self.inventory_vars[(grade, d)] >= self.min_inventory[grade])
+                self.model.Add(self.inventory_vars[(grade, d)] <= self.max_inventory[grade])
+        
+        # Minimum run days constraints
+        for grade in self.grades:
+            for plant in self.allowed_plants[grade]:
+                min_run = self.min_run_days.get((grade, plant), 1)
+                
+                for d in range(self.num_days - min_run + 1):
+                    # If production starts at day d, it must continue for at least min_run days
+                    start_var = self.model.NewBoolVar(f'start_{grade}_{plant}_{d}')
+                    self.model.AddMaxEquality(start_var, [
+                        self.is_producing[(grade, plant, d)],
+                        self.model.NewConstant(1) if d == 0 else self.is_producing[(grade, plant, d-1)].Not()
+                    ])
+                    
+                    # Enforce minimum run
+                    for k in range(min_run):
+                        if d + k < self.num_days:
+                            self.model.Add(self.is_producing[(grade, plant, d + k)] == 1).OnlyEnforceIf(start_var)
+    
+    def _set_objective(self):
+        """Set the objective function"""
+        objective = 0
+        
+        # Stockout penalty
+        stockout_penalty = self.params.get('stockout_penalty', 10)
+        for grade in self.grades:
+            for d in range(self.num_days):
+                objective += stockout_penalty * self.stockout_vars[(grade, d)]
+        
+        # Transition penalty
+        transition_penalty = self.params.get('transition_penalty', 5)
+        for plant in self.plants:
+            for d in range(self.num_days - 1):
+                transition_vars = []
+                for grade1 in self.grades:
+                    if plant not in self.allowed_plants[grade1]:
+                        continue
+                    for grade2 in self.grades:
+                        if plant not in self.allowed_plants[grade2] or grade1 == grade2:
+                            continue
+                        trans_var = self.model.NewBoolVar(f'trans_{plant}_{d}_{grade1}_to_{grade2}')
+                        self.model.AddBoolAnd([
+                            self.is_producing[(grade1, plant, d)],
+                            self.is_producing[(grade2, plant, d + 1)]
+                        ]).OnlyEnforceIf(trans_var)
+                        transition_vars.append(trans_var)
+                
+                objective += transition_penalty * sum(transition_vars)
+        
+        self.model.Minimize(objective)
+    
+    def solve(self):
+        """Solve the optimization problem"""
+        # Set solver parameters
+        self.solver.parameters.max_time_in_seconds = self.params.get('time_limit', 10) * 60
+        self.solver.parameters.num_search_workers = 8
+        
+        # Solve
+        status = self.solver.Solve(self.model)
+        
+        return status
+    
+    def get_results(self):
+        """Extract results from the solved model"""
+        if self.solver.Status() not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+            return None
+        
+        results = {
+            'tables': {},
+            'plots': {},
+            'logs': f"Solver status: {self.solver.StatusName()}\nObjective value: {self.solver.ObjectiveValue()}\n"
+        }
+        
+        # Production schedule table
+        schedule_data = []
+        for d in range(self.num_days):
+            row = {'Date': self.dates[d]}
+            for plant in self.plants:
+                plant_grade = 'Idle'
+                for grade in self.grades:
+                    key = (grade, plant, d)
+                    if key in self.is_producing and self.solver.Value(self.is_producing[key]) == 1:
+                        plant_grade = grade
+                        break
+                row[plant] = plant_grade
+            schedule_data.append(row)
+        
+        results['tables']['production_schedule'] = pd.DataFrame(schedule_data)
+        
+        # Production summary table
+        summary_data = []
+        total_production = 0
+        total_stockout = 0
+        
+        for grade in self.grades:
+            grade_production = 0
+            grade_stockout = 0
+            
+            for plant in self.allowed_plants[grade]:
+                plant_production = 0
+                for d in range(self.num_days):
+                    key = (grade, plant, d)
+                    if key in self.production:
+                        plant_production += self.solver.Value(self.production[key])
+                grade_production += plant_production
+            
+            for d in range(self.num_days):
+                grade_stockout += self.solver.Value(self.stockout_vars[(grade, d)])
+            
+            total_production += grade_production
+            total_stockout += grade_stockout
+            
+            summary_data.append({
+                'Grade': grade,
+                'Total Production': grade_production,
+                'Total Stockout': grade_stockout,
+                'Avg Daily Production': grade_production / self.num_days
+            })
+        
+        results['tables']['production_summary'] = pd.DataFrame(summary_data)
+        
+        # Inventory levels table
+        inventory_data = []
+        for d in range(self.num_days):
+            row = {'Date': self.dates[d]}
+            for grade in self.grades:
+                row[grade] = self.solver.Value(self.inventory_vars[(grade, d)])
+            inventory_data.append(row)
+        
+        results['tables']['inventory_levels'] = pd.DataFrame(inventory_data)
+        
+        # Create plots
+        self._create_plots(results)
+        
+        return results
+    
+    def _create_plots(self, results):
+        """Create visualization plots"""
+        # Production by plant
+        plant_production = {}
+        for plant in self.plants:
+            plant_production[plant] = 0
+            for grade in self.grades:
+                if plant in self.allowed_plants[grade]:
+                    for d in range(self.num_days):
+                        key = (grade, plant, d)
+                        if key in self.production:
+                            plant_production[plant] += self.solver.Value(self.production[key])
+        
+        fig1 = px.bar(
+            x=list(plant_production.keys()),
+            y=list(plant_production.values()),
+            title='Production by Plant',
+            labels={'x': 'Plant', 'y': 'Total Production'}
+        )
+        results['plots']['production_by_plant'] = fig1
+        
+        # Inventory trends
+        inventory_df = results['tables']['inventory_levels']
+        fig2 = go.Figure()
+        for grade in self.grades:
+            fig2.add_trace(go.Scatter(
+                x=inventory_df['Date'],
+                y=inventory_df[grade],
+                mode='lines+markers',
+                name=grade
+            ))
+        fig2.update_layout(title='Inventory Trends', xaxis_title='Date', yaxis_title='Inventory Level')
+        results['plots']['inventory_trends'] = fig2
+        
+        # Stockout analysis
+        stockout_data = []
+        for grade in self.grades:
+            total_stockout = 0
+            for d in range(self.num_days):
+                total_stockout += self.solver.Value(self.stockout_vars[(grade, d)])
+            stockout_data.append({'Grade': grade, 'Stockout': total_stockout})
+        
+        stockout_df = pd.DataFrame(stockout_data)
+        fig3 = px.pie(stockout_df, values='Stockout', names='Grade', title='Stockout Distribution by Grade')
+        results['plots']['stockout_distribution'] = fig3
 
 def run_solver_wrapper(data, params):
     """
-    Wrapper function for the optimization solver.
-    Replace this function with your actual solver implementation.
+    Wrapper function for the production optimization solver.
     
     Args:
         data: Dictionary of DataFrames (sheets from uploaded file)
@@ -264,84 +593,44 @@ def run_solver_wrapper(data, params):
     Returns:
         Dictionary with keys: 'tables', 'plots', 'logs'
     """
-    # === BEGIN USER SOLVER CODE - DO NOT MODIFY THIS HEADER ===
-    # PASTE YOUR SOLVER CODE HERE
-    
-    # Simulate processing time based on parameters
-    time.sleep(2)
-    
-    # Generate mock results for demonstration
-    tables = {}
-    plots = {}
-    logs = ""
-    
-    # Mock summary table
-    summary_data = {
-        'Metric': ['Total Production', 'Total Demand', 'Stockouts', 'Transitions', 'Objective Value'],
-        'Value': [12500, 11800, 150, 8, 24500],
-        'Unit': ['MT', 'MT', 'MT', 'count', 'points']
-    }
-    tables['summary'] = pd.DataFrame(summary_data)
-    
-    # Mock production schedule
-    dates = pd.date_range(start='2024-01-01', periods=10, freq='D')
-    schedule_data = {
-        'Date': dates,
-        'Plant1': ['GradeA'] * 5 + ['GradeB'] * 5,
-        'Plant2': ['GradeB'] * 3 + ['GradeA'] * 4 + ['GradeC'] * 3,
-        'Plant3': ['GradeC'] * 6 + ['GradeA'] * 4
-    }
-    tables['production_schedule'] = pd.DataFrame(schedule_data)
-    
-    # Mock inventory levels
-    inventory_data = {
-        'Date': dates,
-        'GradeA': np.random.randint(800, 2500, 10),
-        'GradeB': np.random.randint(600, 1800, 10),
-        'GradeC': np.random.randint(400, 1200, 10)
-    }
-    tables['inventory'] = pd.DataFrame(inventory_data)
-    
-    # Mock plots using Plotly
-    # Production by plant
-    plant_production = pd.DataFrame({
-        'Plant': ['Plant1', 'Plant2', 'Plant3'],
-        'Production': [4500, 5200, 2800]
-    })
-    fig1 = px.bar(plant_production, x='Plant', y='Production', 
-                  title='Production by Plant', color='Plant')
-    plots['production_by_plant'] = fig1
-    
-    # Inventory trends
-    fig2 = go.Figure()
-    for grade in ['GradeA', 'GradeB', 'GradeC']:
-        fig2.add_trace(go.Scatter(
-            x=dates, y=tables['inventory'][grade],
-            mode='lines+markers', name=grade
-        ))
-    fig2.update_layout(title='Inventory Trends', xaxis_title='Date', yaxis_title='Inventory Level')
-    plots['inventory_trends'] = fig2
-    
-    # Mock solver logs
-    logs = """Solver started at 2024-01-15 10:30:00
-Initializing model...
-Setting up constraints...
-Running optimization...
-Iteration 1: Objective = 32000
-Iteration 2: Objective = 28000
-Iteration 3: Objective = 25000
-Iteration 4: Objective = 24500
-Optimization completed successfully!
-Total time: 45.2 seconds
-"""
-    
-    # === END USER SOLVER CODE ===
-    
-    return {
-        'tables': tables,
-        'plots': plots,
-        'logs': logs
-    }
+    try:
+        # Initialize optimizer
+        optimizer = ProductionOptimizer(data, params)
+        
+        # Preprocess data
+        if not optimizer.preprocess_data():
+            raise Exception("Data preprocessing failed")
+        
+        # Build model
+        optimizer.build_model()
+        
+        # Solve
+        status = optimizer.solve()
+        
+        if status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+            raise Exception(f"Solver could not find solution. Status: {optimizer.solver.StatusName()}")
+        
+        # Get results
+        results = optimizer.get_results()
+        
+        if results is None:
+            raise Exception("Failed to extract results from solver")
+        
+        # Add solver logs
+        results['logs'] += f"\nSolver statistics:\n"
+        results['logs'] += f"  - Conflicts: {optimizer.solver.NumConflicts()}\n"
+        results['logs'] += f"  - Branches: {optimizer.solver.NumBranches()}\n"
+        results['logs'] += f"  - Wall time: {optimizer.solver.WallTime():.2f}s\n"
+        
+        return results
+        
+    except Exception as e:
+        return {
+            'tables': {},
+            'plots': {},
+            'logs': f"Error during optimization: {str(e)}"
+        }
+# === END USER SOLVER CODE ===
 
 def display_plotly_figure(fig, caption=None):
     """Display Plotly figure with optional caption and export button"""
@@ -602,18 +891,36 @@ def main():
         st.markdown("## 📈 Optimization Results")
         
         # Key metrics
-        if 'summary' in st.session_state.results['tables']:
-            summary_df = st.session_state.results['tables']['summary']
-            cols = st.columns(len(summary_df))
-            for idx, (_, row) in enumerate(summary_df.iterrows()):
-                with cols[idx]:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">{row['Metric']}</div>
-                        <div class="metric-value">{row['Value']}</div>
-                        <div class="metric-label">{row['Unit']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+        if 'production_summary' in st.session_state.results['tables']:
+            summary_df = st.session_state.results['tables']['production_summary']
+            total_production = summary_df['Total Production'].sum()
+            total_stockout = summary_df['Total Stockout'].sum()
+            
+            cols = st.columns(3)
+            with cols[0]:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">Total Production</div>
+                    <div class="metric-value">{total_production:,.0f}</div>
+                    <div class="metric-label">MT</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with cols[1]:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">Total Stockout</div>
+                    <div class="metric-value">{total_stockout:,.0f}</div>
+                    <div class="metric-label">MT</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with cols[2]:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">Planning Horizon</div>
+                    <div class="metric-value">{len(st.session_state.results['tables']['production_schedule'])}</div>
+                    <div class="metric-label">Days</div>
+                </div>
+                """, unsafe_allow_html=True)
         
         # Results tabs
         tab1, tab2, tab3, tab4 = st.tabs(["📊 Summary", "📋 Tables", "📈 Plots", "📝 Logs"])
@@ -621,8 +928,8 @@ def main():
         with tab1:
             st.markdown("### Optimization Summary")
             
-            if 'summary' in st.session_state.results['tables']:
-                st.dataframe(st.session_state.results['tables']['summary'], use_container_width=True)
+            if 'production_summary' in st.session_state.results['tables']:
+                st.dataframe(st.session_state.results['tables']['production_summary'], use_container_width=True)
             
             # Additional summary cards
             col1, col2, col3 = st.columns(3)
@@ -638,18 +945,18 @@ def main():
             with col2:
                 st.markdown("""
                 <div class="metric-card">
-                    <div class="metric-label">Run Time</div>
-                    <div class="metric-value">45.2s</div>
-                    <div class="metric-label">Total Duration</div>
+                    <div class="metric-label">Plants Used</div>
+                    <div class="metric-value">{len(st.session_state.sheets.get('Plant', pd.DataFrame())}</div>
+                    <div class="metric-label">Active Plants</div>
                 </div>
                 """, unsafe_allow_html=True)
             
             with col3:
                 st.markdown("""
                 <div class="metric-card">
-                    <div class="metric-label">Constraints</div>
-                    <div class="metric-value">12/12</div>
-                    <div class="metric-label">Satisfied</div>
+                    <div class="metric-label">Grades</div>
+                    <div class="metric-value">{len(st.session_state.results['tables']['production_summary'])}</div>
+                    <div class="metric-label">Production Grades</div>
                 </div>
                 """, unsafe_allow_html=True)
         
@@ -657,21 +964,20 @@ def main():
             st.markdown("### Result Tables")
             
             for table_name, table_data in st.session_state.results['tables'].items():
-                if table_name != 'summary':  # Already shown in summary tab
-                    st.markdown(f"#### {table_name.replace('_', ' ').title()}")
-                    st.dataframe(table_data, use_container_width=True)
-                    
-                    # Export buttons for each table
-                    col1, col2 = st.columns([1, 5])
-                    with col1:
-                        csv = table_data.to_csv(index=False)
-                        st.download_button(
-                            label="📥 CSV",
-                            data=csv,
-                            file_name=f"{table_name}.csv",
-                            mime="text/csv",
-                            key=f"csv_{table_name}"
-                        )
+                st.markdown(f"#### {table_name.replace('_', ' ').title()}")
+                st.dataframe(table_data, use_container_width=True)
+                
+                # Export buttons for each table
+                col1, col2 = st.columns([1, 5])
+                with col1:
+                    csv = table_data.to_csv(index=False)
+                    st.download_button(
+                        label="📥 CSV",
+                        data=csv,
+                        file_name=f"{table_name}.csv",
+                        mime="text/csv",
+                        key=f"csv_{table_name}"
+                    )
         
         with tab3:
             st.markdown("### Visualization Plots")
