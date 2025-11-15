@@ -221,7 +221,7 @@ st.markdown("""
     
     /* Material Cards */
     .material-card {
-        background: #FFF0FF;
+        background: #F0F2FF;
         border-radius: 16px;
         margin-bottom: 1.5rem;
         padding: 2rem;
