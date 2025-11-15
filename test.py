@@ -119,6 +119,7 @@ st.markdown("""
     .app-bar {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
+        text-align: center;
         padding: 2rem 3rem;
         margin: -3rem -3rem 3rem -3rem;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -126,7 +127,6 @@ st.markdown("""
     
     .app-bar h1 {
         margin: 0;
-        align-items: center;
         font-size: 2rem;
         font-weight: 600;
         letter-spacing: -0.5px;
@@ -529,7 +529,7 @@ st.markdown("""
 # HEADER - Material Design App Bar
 # ============================================================================
 st.markdown("""
-<div text-align: center;class="app-bar">
+<div class="app-bar">
     <h1>🏭 Polymer Production Scheduler</h1>
 </div>
 """, unsafe_allow_html=True)
