@@ -242,6 +242,7 @@ st.markdown("""
         margin: 0 0 1rem 0;
         display: flex;
         align-items: center;
+        justify-content: center; 
     }
     
     .card-subtitle {
@@ -866,7 +867,6 @@ elif st.session_state.step == 3:
         st.markdown("""
         <div class="material-card">
             <div class="card-title">⚡ Running Optimization</div>
-            <div class="card-subtitle">Please wait while we compute the optimal schedule...</div>
         </div>
         """, unsafe_allow_html=True)
         
