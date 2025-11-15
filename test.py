@@ -762,7 +762,18 @@ if uploaded_file:
                         deficit = model.NewIntVar(0, 100000, f'deficit_{grade}_{d}')
                         model.Add(deficit >= min_inv_value - inventory_tomorrow)
                         model.Add(deficit >= 0)
-                        objective += stockout_penalty * closing_deficit * 3
+                        objective += stockout_penalty * deficit
+            
+            # Minimum closing inventory
+            for grade in grades:
+                closing_inventory = inventory_vars[(grade, num_days - buffer_days)]
+                min_closing = min_closing_inventory[grade]
+                
+                if min_closing > 0:
+                    closing_deficit = model.NewIntVar(0, 100000, f'closing_deficit_{grade}')
+                    model.Add(closing_deficit >= min_closing - closing_inventory)
+                    model.Add(closing_deficit >= 0)
+                    objective += stockout_penalty * closing_deficit * 3
             
             for grade in grades:
                 for d in range(1, num_days + 1):
@@ -1274,16 +1285,5 @@ else:
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #9CA3AF; font-size: 0.875rem;'>Production Scheduler • Built with Streamlit</div>",
-    unsafe_allow_html=True) 
-stockout_penalty * deficit
-            
-            # Minimum closing inventory
-            for grade in grades:
-                closing_inventory = inventory_vars[(grade, num_days - buffer_days)]
-                min_closing = min_closing_inventory[grade]
-                
-                if min_closing > 0:
-                    closing_deficit = model.NewIntVar(0, 100000, f'closing_deficit_{grade}')
-                    model.Add(closing_deficit >= min_closing - closing_inventory)
-                    model.Add(closing_deficit >= 0)
-                    objective +=
+    unsafe_allow_html=True
+)
