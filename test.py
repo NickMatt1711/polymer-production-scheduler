@@ -123,6 +123,7 @@ st.markdown("""
         padding: 2rem 3rem;
         margin: -3rem -3rem 3rem -3rem;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 16px;
     }
     
     .app-bar h1 {
@@ -220,7 +221,7 @@ st.markdown("""
     
     /* Material Cards */
     .material-card {
-        background: white;
+        background: #BC88D1;
         border-radius: 16px;
         padding: 2rem;
         margin-bottom: 1.5rem;
