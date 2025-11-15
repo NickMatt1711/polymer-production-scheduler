@@ -1063,6 +1063,7 @@ else:
                         <div class="metric-box">
                             <div class="metric-label">Objective</div>
                             <div class="metric-value">{best_solution['objective']:,.0f}</div>
+                            <div class="metric-label">Lower is better</div>
                         </div>
                     """, unsafe_allow_html=True)
                 
@@ -1086,7 +1087,7 @@ else:
                     st.markdown(f"""
                         <div class="metric-box">
                             <div class="metric-label">Horizon</div>
-                            <div class="metric-value">{num_days}d</div>
+                            <div class="metric-value">{num_days}-{buffer_days}days</div>
                         </div>
                     """, unsafe_allow_html=True)
                 
