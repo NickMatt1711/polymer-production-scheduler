@@ -992,11 +992,11 @@ elif st.session_state.step == 3:
         last_date = dates[-1]
         
         # Use parameters from step 2 (stored in widgets)
-        buffer_days = 3  # Default, should come from session state in production
+        '''buffer_days = 3  # Default, should come from session state in production
         time_limit_min = 10  # Default
         stockout_penalty = 10
         transition_penalty = 10
-        continuity_bonus = 1
+        continuity_bonus = 1'''
         
         for i in range(1, buffer_days + 1):
             dates.append(last_date + timedelta(days=i))
