@@ -461,9 +461,9 @@ else:
         st.session_state.uploaded_file = uploaded_file
         st.rerun()
 
-else:
-    # File is uploaded, show main interface
-    uploaded_file = st.session_state.uploaded_file
+    else:
+        # File is uploaded, show main interface
+        uploaded_file = st.session_state.uploaded_file
     
     try:
         uploaded_file.seek(0)
