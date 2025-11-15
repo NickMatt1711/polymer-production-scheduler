@@ -571,6 +571,13 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# Use parameters from step 2 (stored in widgets)
+buffer_days = 3  # Default, should come from session state in production
+time_limit_min = 10  # Default
+stockout_penalty = 10
+transition_penalty = 10
+continuity_bonus = 1
+
 # ============================================================================
 # STEP 1: UPLOAD DATA
 # ============================================================================
@@ -723,12 +730,6 @@ if st.session_state.step == 1:
 # ============================================================================
 # STEP 2: PREVIEW & CONFIGURE
 # ============================================================================
-# Use parameters from step 2 (stored in widgets)
-buffer_days = 3  # Default, should come from session state in production
-time_limit_min = 10  # Default
-stockout_penalty = 10
-transition_penalty = 10
-continuity_bonus = 1
 
 elif st.session_state.step == 2:
     
