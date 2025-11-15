@@ -419,6 +419,8 @@ if st.session_state.uploaded_file is None:
         </div>
     </div>
     """, unsafe_allow_html=True)
+else:
+    st.success(f"File uploaded: {st.session_state.uploaded_file.name}")
     
     st.markdown("---")
     
