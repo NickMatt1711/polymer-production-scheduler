@@ -290,7 +290,7 @@ st.markdown("""
         background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
         border: 2px dashed #667eea;
         border-radius: 16px;
-        padding: 3rem 2rem;
+        padding: 1rem 1rem;
         text-align: center;
         transition: all 0.3s ease;
     }
@@ -576,14 +576,14 @@ st.markdown(f"""
 # ============================================================================
 if st.session_state.step == 1:
 
-    col1, col2 = st.columns([7, 1])
+    col1, col2 = st.columns([4, 1])
 
     with col1:
         uploaded_file = st.file_uploader(
             "Choose Excel File",
             type=["xlsx"],
             help="Upload an Excel file with Plant, Inventory, and Demand sheets",
-            label_visibility="visible"
+            label_visibility="collapsed"
         )
     
         if uploaded_file is not None:
