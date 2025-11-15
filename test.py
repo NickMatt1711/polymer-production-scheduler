@@ -236,6 +236,7 @@ st.markdown("""
     .card-title {
         font-size: 1.25rem;
         font-weight: 600;
+        text-align: centre;
         color: #212121;
         margin: 0 0 1rem 0;
         display: flex;
@@ -510,7 +511,7 @@ st.markdown("""
     }
     
     .styled-list li {
-        padding: 0.5rem 0 0.5rem 1rem;
+        padding: 0.5rem 0 0.5rem 2rem;
         position: relative;
     }
     
@@ -784,7 +785,6 @@ elif st.session_state.step == 2:
         st.markdown("""
         <div class="material-card">
             <div class="card-title">⚙️ Optimization Parameters</div>
-            <div class="card-subtitle">Configure solver settings and objective weights</div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1443,8 +1443,7 @@ elif st.session_state.step == 3:
             # Performance metrics dashboard
             st.markdown("""
             <div class="material-card">
-                <div text-align:centre;class="card-title">📊 Optimization Results</div>
-                <div class="card-subtitle">Key performance indicators from the optimal schedule</div>
+                <div class="card-title">📊 Optimization Results</div>
             </div>
             """, unsafe_allow_html=True)
             
