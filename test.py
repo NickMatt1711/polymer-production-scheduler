@@ -528,9 +528,8 @@ st.markdown("""
 # HEADER - Material Design App Bar
 # ============================================================================
 st.markdown("""
-<div class="app-bar">
+<div text-align: center;class="app-bar">
     <h1>🏭 Polymer Production Scheduler</h1>
-    <p>Intelligent Multi-Plant Optimization Platform</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -569,18 +568,21 @@ st.markdown(f"""
 # ============================================================================
 if st.session_state.step == 1:
     
-    # Welcome section
-    st.markdown("""
-    <div class="elevated-card">
-        <h2 style="margin: 0 0 1rem 0; color: #212121; font-size: 1.5rem;">Welcome! Let's optimize your production schedule</h2>
-        <p style="color: #424242; font-size: 1rem; line-height: 1.6; margin: 0;">
-            This advanced optimization platform uses constraint programming to create efficient production schedules 
-            while managing inventory, minimizing transitions, and meeting demand across multiple plants.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    uploaded_file = st.file_uploader(
+        "Choose Excel File",
+        type=["xlsx"],
+        help="Upload an Excel file with Plant, Inventory, and Demand sheets",
+        label_visibility="collapsed"
+    )
     
-    col1, col2 = st.columns([1.5, 1])
+    if uploaded_file is not None:
+        st.session_state.uploaded_file = uploaded_file
+        st.success("✅ File uploaded successfully!")
+        time.sleep(0.5)
+        st.session_state.step = 2
+        st.rerun()
+    
+    col1, col2 = st.columns([1, 1])
     
     with col1:
         st.markdown("""
@@ -596,7 +598,8 @@ if st.session_state.step == 1:
             </ol>
         </div>
         """, unsafe_allow_html=True)
-        
+            
+    with col2:
         st.markdown("""
         <div class="material-card">
             <div class="card-title">✨ Key Capabilities</div>
@@ -620,14 +623,6 @@ if st.session_state.step == 1:
             </div>
         </div>
         """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="material-card">
-            <div class="card-title">📥 Download Template</div>
-            <div class="card-subtitle">Pre-configured Excel template with sample data</div>
-        </div>
-        """, unsafe_allow_html=True)
         
         sample_workbook = get_sample_workbook()
         
@@ -638,43 +633,8 @@ if st.session_state.step == 1:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
-        
-        st.markdown("""
-        <div class="material-card" style="margin-top: 1.5rem;">
-            <div class="card-title">📄 Required Format</div>
-            <div style="font-size: 0.875rem; color: #757575; line-height: 1.6;">
-                <strong style="color: #424242;">Your Excel file must contain:</strong><br><br>
-                <span class="chip info">Plant Sheet</span> Capacity & shutdowns<br>
-                <span class="chip info">Inventory Sheet</span> Grades & constraints<br>
-                <span class="chip info">Demand Sheet</span> Daily forecasts<br>
-                <span class="chip info">Transition Sheets</span> Optional rules
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
     
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    
-    # Upload section
-    st.markdown("""
-    <div class="material-card">
-        <div class="card-title">📤 Upload Your Production Data</div>
-        <div class="card-subtitle">Select your Excel file to begin optimization</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    uploaded_file = st.file_uploader(
-        "Choose Excel File",
-        type=["xlsx"],
-        help="Upload an Excel file with Plant, Inventory, and Demand sheets",
-        label_visibility="collapsed"
-    )
-    
-    if uploaded_file is not None:
-        st.session_state.uploaded_file = uploaded_file
-        st.success("✅ File uploaded successfully!")
-        time.sleep(0.5)
-        st.session_state.step = 2
-        st.rerun()
     
     # Detailed format documentation
     with st.expander("📚 Detailed Excel Format Specification", expanded=False):
