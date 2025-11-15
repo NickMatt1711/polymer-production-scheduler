@@ -576,7 +576,7 @@ buffer_days = 3 # Default, should come from session state in production
 time_limit_min = 10  # Default
 stockout_penalty = 10
 transition_penalty = 10
-continuity_bonus = 10
+continuity_bonus = 1
 
 # ============================================================================
 # STEP 1: UPLOAD DATA
