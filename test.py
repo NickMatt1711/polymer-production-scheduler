@@ -98,7 +98,7 @@ if 'optimization_params' not in st.session_state:
         'buffer_days': 3,
         'time_limit_min': 10,
         'stockout_penalty': 10,
-        'transition_penalty': 10,
+        'transition_penalty': 50,
         'continuity_bonus': 1
     }
 # ============================================================================
