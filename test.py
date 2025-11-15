@@ -11,83 +11,6 @@ import base64
 from pathlib import Path
 import plotly.express as px
 import plotly.graph_objects as go
-from openpyxl import Workbook
-from openpyxl.writer.excel import save_virtual_workbook
-
-# -------------------------
-# Helper: create sample workbook if not present
-# -------------------------
-def create_sample_workbook():
-    """Create a basic sample Excel workbook in-memory with Plant, Inventory, Demand sheets."""
-    wb = Workbook()
-    # Plant sheet
-    ws = wb.active
-    ws.title = "Plant"
-    ws.append(["Plant", "Capacity per day", "Material Running", "Expected Run Days", "Shutdown Start Date", "Shutdown End Date"])
-    ws.append(["Plant1", 1000, "GradeA", 5, "", ""])
-    ws.append(["Plant2", 800, "", 0, (datetime.today() + timedelta(days=7)).strftime("%Y-%m-%d"), (datetime.today() + timedelta(days=9)).strftime("%Y-%m-%d")])
-    
-    # Inventory sheet
-    ws2 = wb.create_sheet("Inventory")
-    ws2.append(["Grade Name", "Opening Inventory", "Min. Inventory", "Max. Inventory", "Min. Run Days", "Max. Run Days", "Force Start Date", "Lines", "Rerun Allowed", "Min. Closing Inventory"])
-    ws2.append(["GradeA", 2000, 200, 10000, 1, 10, "", "Plant1, Plant2", "Yes", 100])
-    ws2.append(["GradeB", 500, 50, 5000, 2, 8, "", "Plant2", "Yes", 50])
-    
-    # Demand sheet
-    ws3 = wb.create_sheet("Demand")
-    today = datetime.today().date()
-    dates = [today + timedelta(days=i) for i in range(10)]
-    header = ["Date", "GradeA", "GradeB"]
-    ws3.append(header)
-    for d in dates:
-        ws3.append([d.strftime("%Y-%m-%d"), 150, 80])
-    
-    return io.BytesIO(save_virtual_workbook(wb))
-
-# -------------------------
-# Process shutdown helper (unchanged logic)
-# -------------------------
-def process_shutdown_dates(plant_df, dates):
-    """Process shutdown dates for each plant"""
-    shutdown_periods = {}
-    
-    for index, row in plant_df.iterrows():
-        plant = row['Plant']
-        shutdown_start = row.get('Shutdown Start Date')
-        shutdown_end = row.get('Shutdown End Date')
-        
-        # Check if both start and end dates are provided
-        if pd.notna(shutdown_start) and pd.notna(shutdown_end):
-            try:
-                start_date = pd.to_datetime(shutdown_start).date()
-                end_date = pd.to_datetime(shutdown_end).date()
-                
-                # Validate date range
-                if start_date > end_date:
-                    st.warning(f"⚠️ Shutdown start date after end date for {plant}. Ignoring shutdown.")
-                    shutdown_periods[plant] = []
-                    continue
-                
-                # Find day indices for shutdown period
-                shutdown_days = []
-                for d, date in enumerate(dates):
-                    if start_date <= date <= end_date:
-                        shutdown_days.append(d)
-                
-                if shutdown_days:
-                    shutdown_periods[plant] = shutdown_days
-                    st.info(f"🔧 Shutdown scheduled for {plant}: {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({len(shutdown_days)} days)")
-                else:
-                    shutdown_periods[plant] = []
-                    st.info(f"ℹ️ Shutdown period for {plant} is outside planning horizon")
-                    
-            except Exception as e:
-                st.warning(f"⚠️ Invalid shutdown dates for {plant}: {e}")
-                shutdown_periods[plant] = []
-        else:
-            shutdown_periods[plant] = []
-    
-    return shutdown_periods
 
 # -------------------------
 # Solution Callback (preserved)
@@ -198,6 +121,51 @@ class SolutionCallback(cp_model.CpSolverSolutionCallback):
 
     def num_solutions(self):
         return len(self.solutions)
+
+# -------------------------
+# Helper: process shutdown dates (preserved)
+# -------------------------
+def process_shutdown_dates(plant_df, dates):
+    """Process shutdown dates for each plant"""
+    shutdown_periods = {}
+    
+    for index, row in plant_df.iterrows():
+        plant = row['Plant']
+        shutdown_start = row.get('Shutdown Start Date')
+        shutdown_end = row.get('Shutdown End Date')
+        
+        # Check if both start and end dates are provided
+        if pd.notna(shutdown_start) and pd.notna(shutdown_end):
+            try:
+                start_date = pd.to_datetime(shutdown_start).date()
+                end_date = pd.to_datetime(shutdown_end).date()
+                
+                # Validate date range
+                if start_date > end_date:
+                    st.warning(f"⚠️ Shutdown start date after end date for {plant}. Ignoring shutdown.")
+                    shutdown_periods[plant] = []
+                    continue
+                
+                # Find day indices for shutdown period
+                shutdown_days = []
+                for d, date in enumerate(dates):
+                    if start_date <= date <= end_date:
+                        shutdown_days.append(d)
+                
+                if shutdown_days:
+                    shutdown_periods[plant] = shutdown_days
+                    st.info(f"🔧 Shutdown scheduled for {plant}: {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({len(shutdown_days)} days)")
+                else:
+                    shutdown_periods[plant] = []
+                    st.info(f"ℹ️ Shutdown period for {plant} is outside planning horizon")
+                    
+            except Exception as e:
+                st.warning(f"⚠️ Invalid shutdown dates for {plant}: {e}")
+                shutdown_periods[plant] = []
+        else:
+            shutdown_periods[plant] = []
+    
+    return shutdown_periods
 
 # -------------------------
 # Page config & CSS (dark Material + glass morphism)
@@ -361,22 +329,25 @@ with st.sidebar:
     st.markdown("<div class='subtle' style='margin-top:8px'>Keyboard: N/A (desktop-focused)</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Sample download
+    # Sample download (load from repository - same folder as app.py)
     st.markdown("<div class='side-card'>", unsafe_allow_html=True)
-    sample_workbook = None
-    # Try to load a template next to app.py, otherwise create one
     try:
         current_dir = Path(__file__).parent
-        sample_path = current_dir / "polymer_production_template.xlsx"
-        if sample_path.exists():
-            with open(sample_path, "rb") as f:
-                sample_workbook = io.BytesIO(f.read())
+        template_path = current_dir / "polymer_production_template.xlsx"
+        if template_path.exists():
+            with open(template_path, "rb") as f:
+                template_bytes = f.read()
+            st.download_button(
+                "📥 Download Template",
+                data=template_bytes,
+                file_name="polymer_production_template.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
         else:
-            sample_workbook = create_sample_workbook()
-    except Exception:
-        sample_workbook = create_sample_workbook()
-
-    st.download_button("📥 Download Template", data=sample_workbook, file_name="polymer_production_template.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.error("Template file 'polymer_production_template.xlsx' not found in repository.")
+    except Exception as e:
+        st.error(f"Unable to load template file: {e}")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # -------------------------
@@ -393,11 +364,6 @@ if 'processing' not in st.session_state:
     st.session_state.processing = False
 if 'last_status' not in st.session_state:
     st.session_state.last_status = ""
-
-# If top-right sidebar run was clicked, we'll map that to main run too (button key triggers file reprocessing)
-if st.session_state.get("run_topbar", False):
-    # re-trigger - this is just to show it exists. Actual run is in main area when user clicks 'Run optimization'
-    pass
 
 # -------------------------
 # Data preview + validation (single page, tabbed cards)
@@ -656,8 +622,6 @@ if run_btn:
             # Transition rules parsing
             transition_rules = {}
             for name, df in transition_dfs.items():
-                # original code used per-plant; set line name by parsing sheet name heuristics
-                # Keep structure consistent
                 plant_name = name.replace("Transition_", "").replace("Transition-", "").replace("transition_", "")
                 try:
                     transition_rules[plant_name] = {}
@@ -978,7 +942,6 @@ if run_btn:
             solver.parameters.max_time_in_seconds = time_limit_min * 60.0
             solver.parameters.num_search_workers = 8
             solver.parameters.random_seed = 42
-            # solver.parameters.log_search_progress = True  # optional
 
             solution_callback = SolutionCallback(production, inventory_vars, stockout_vars, is_producing, grades, lines, dates, formatted_dates, num_days)
 
