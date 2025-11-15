@@ -582,13 +582,27 @@ if st.session_state.step == 1:
         help="Upload an Excel file with Plant, Inventory, and Demand sheets",
         label_visibility="collapsed"
     )
-    
-    if uploaded_file is not None:
-        st.session_state.uploaded_file = uploaded_file
-        st.success("✅ File uploaded successfully!")
-        time.sleep(0.5)
-        st.session_state.step = 2
-        st.rerun()
+
+    col1, col2 = st.columns([11, 1])
+
+    with col1:
+        if uploaded_file is not None:
+            st.session_state.uploaded_file = uploaded_file
+            st.success("✅ File uploaded successfully!")
+            time.sleep(0.5)
+            st.session_state.step = 2
+            st.rerun()
+
+    with col2:
+        sample_workbook = get_sample_workbook()
+        
+        st.download_button(
+            label="📥 Download Excel Template",
+            data=sample_workbook,
+            file_name="polymer_production_template.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
     
     col1, col2 = st.columns([1, 1])
     
@@ -632,15 +646,6 @@ if st.session_state.step == 1:
         </div>
         """, unsafe_allow_html=True)
         
-        sample_workbook = get_sample_workbook()
-        
-        st.download_button(
-            label="📥 Download Excel Template",
-            data=sample_workbook,
-            file_name="polymer_production_template.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
     
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     
