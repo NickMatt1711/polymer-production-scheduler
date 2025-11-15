@@ -582,7 +582,7 @@ if st.session_state.step == 1:
         uploaded_file = st.file_uploader(
             "Choose Excel File",
             type=["xlsx"],
-            label="Upload an Excel file with Plant, Inventory, and Demand sheets",
+            help="Upload an Excel file with Plant, Inventory, and Demand sheets",
             label_visibility="visible"
         )
     
