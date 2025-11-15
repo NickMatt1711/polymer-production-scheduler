@@ -92,6 +92,15 @@ if 'solutions' not in st.session_state:
 if 'best_solution' not in st.session_state:
     st.session_state.best_solution = None
 
+# Initialize optimization parameters in session state
+if 'optimization_params' not in st.session_state:
+    st.session_state.optimization_params = {
+        'buffer_days': 3,
+        'time_limit_min': 10,
+        'stockout_penalty': 10,
+        'transition_penalty': 10,
+        'continuity_bonus': 1
+    }
 # ============================================================================
 # MODERN MATERIAL MINIMALISM CSS
 # ============================================================================
@@ -571,12 +580,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Use parameters from step 2 (stored in widgets)
-buffer_days = 0 # Default, should come from session state in production
-time_limit_min = 0  # Default
-stockout_penalty = 0
-transition_penalty = 0
-continuity_bonus = 0
 
 # ============================================================================
 # STEP 1: UPLOAD DATA
@@ -823,42 +826,43 @@ elif st.session_state.step == 2:
         
         with col1:
             st.markdown("#### Core Settings")
-            time_limit_min = st.number_input(
+            # Update session state directly
+            st.session_state.optimization_params['time_limit_min'] = st.number_input(
                 "⏱️ Time Limit (minutes)",
                 min_value=1,
                 max_value=120,
-                value=10,
+                value=st.session_state.optimization_params['time_limit_min'],
                 help="Maximum solver runtime"
             )
             
-            buffer_days = st.number_input(
+            st.session_state.optimization_params['buffer_days'] = st.number_input(
                 "📅 Planning Buffer (days)",
                 min_value=0,
                 max_value=7,
-                value=3,
+                value=st.session_state.optimization_params['buffer_days'],
                 help="Additional days for safety planning"
             )
         
         with col2:
             st.markdown("#### Objective Weights")
-            stockout_penalty = st.number_input(
+            st.session_state.optimization_params['stockout_penalty'] = st.number_input(
                 "🎯 Stockout Penalty",
                 min_value=1,
-                value=10,
+                value=st.session_state.optimization_params['stockout_penalty'],
                 help="Cost weight for inventory shortages"
             )
             
-            transition_penalty = st.number_input(
+            st.session_state.optimization_params['transition_penalty'] = st.number_input(
                 "🔄 Transition Penalty",
                 min_value=1,
-                value=10,
+                value=st.session_state.optimization_params['transition_penalty'],
                 help="Cost weight for grade changeovers"
             )
             
-            continuity_bonus = st.number_input(
-                "➕ Continuity Bonus",
+            st.session_state.optimization_params['continuity_bonus'] = st.number_input(
+                "➕ Continuity Bonus", 
                 min_value=0,
-                value=1,
+                value=st.session_state.optimization_params['continuity_bonus'],
                 help="Reward for extended production runs"
             )
         
@@ -892,6 +896,14 @@ elif st.session_state.step == 3:
         uploaded_file = st.session_state.uploaded_file
         uploaded_file.seek(0)
         excel_file = io.BytesIO(uploaded_file.read())
+
+        # Extract parameters from session state
+        params = st.session_state.optimization_params
+        buffer_days = params['buffer_days']
+        time_limit_min = params['time_limit_min'] 
+        stockout_penalty = params['stockout_penalty']
+        transition_penalty = params['transition_penalty']
+        continuity_bonus = params['continuity_bonus']
         
         # Show optimization progress
         st.markdown("""
