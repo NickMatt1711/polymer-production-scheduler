@@ -601,7 +601,7 @@ if st.session_state.step == 1:
                 /* Target the download button container */
                 .stDownloadButton > button {
                     height: calc(100% + 3rem) !important;
-                    min-height: 3rem !important;
+                    min-height: 7rem !important;
                     margin-left: -0.5rem !important;
                     margin-right: -0.5rem !important;
                 }
