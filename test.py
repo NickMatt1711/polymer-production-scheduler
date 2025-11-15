@@ -572,11 +572,11 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Use parameters from step 2 (stored in widgets)
-buffer_days = 3 # Default, should come from session state in production
-time_limit_min = 10  # Default
-stockout_penalty = 10
-transition_penalty = 10
-continuity_bonus = 1
+buffer_days = 0 # Default, should come from session state in production
+time_limit_min = 0  # Default
+stockout_penalty = 0
+transition_penalty = 0
+continuity_bonus = 0
 
 # ============================================================================
 # STEP 1: UPLOAD DATA
