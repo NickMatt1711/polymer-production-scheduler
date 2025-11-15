@@ -404,6 +404,8 @@ st.markdown("""
         padding: 0.5rem;
         border-radius: 12px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        display: flex;
+        width: 100%;
     }
     
     .stTabs [data-baseweb="tab"] {
@@ -414,6 +416,9 @@ st.markdown("""
         border: none;
         color: #757575;
         transition: all 0.3s ease;
+        flex: 1; /* This makes all tabs equal width */
+        text-align: center;
+        justify-content: center;
     }
     
     .stTabs [aria-selected="true"] {
