@@ -583,7 +583,7 @@ if st.session_state.step == 1:
             "Choose Excel File",
             type=["xlsx"],
             label="Upload an Excel file with Plant, Inventory, and Demand sheets",
-            label_visibility="visibile"
+            label_visibility="visible"
         )
     
         if uploaded_file is not None:
