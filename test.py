@@ -334,16 +334,16 @@ col_upload, col_params, col_summary = st.columns([1.2, 1, 0.9])
 # ---------- FILE UPLOAD CARD ----------
 with col_upload:
     st.markdown("<div class='mm-card'>", unsafe_allow_html=True)
-    st.markdown("<h2>📥 Upload Excel</h2>")
-    st.markdown("<div class='helper'>Drag & drop or click to select your .xlsx file (Plant, Inventory, Demand sheets required)</div>")
+    st.markdown("<h2>📥 Upload Excel</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='helper'>Drag & drop or click to select your .xlsx file (Plant, Inventory, Demand sheets required)</div>", unsafe_allow_html=True)
     uploaded_file = st.file_uploader("", type=["xlsx"], help="Upload an Excel file with Plant, Inventory, and Demand sheets")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------- PARAMETERS CARD ----------
 with col_params:
     st.markdown("<div class='mm-card'>", unsafe_allow_html=True)
-    st.markdown("<h2>⚙️ Optimization Parameters</h2>")
-    st.markdown("<div class='helper'>Adjust solver runtime and objective weights</div>")
+    st.markdown("<h2>⚙️ Optimization Parameters</h2>", unsafe_allow_html=True)
+    st.markdown("<div class='helper'>Adjust solver runtime and objective weights</div>", unsafe_allow_html=True)
 
     # Keep variable names identical to original so solver logic finds them
     time_limit_min = st.number_input("Time limit (minutes)", min_value=1, max_value=120, value=10, help="Maximum time to run the optimization")
@@ -358,13 +358,13 @@ with col_params:
 # ---------- SUMMARY + CTA CARD ----------
 with col_summary:
     st.markdown("<div class='mm-card' style='position: sticky; top: 28px;'>", unsafe_allow_html=True)
-    st.markdown("<h2>Summary</h2>")
+    st.markdown("<h2>Summary</h2>", unsafe_allow_html=True)
     # File meta preview
     if uploaded_file:
         try:
             uploaded_name = uploaded_file.name
             uploaded_size_kb = int(uploaded_file.size / 1024)
-            st.markdown(f"**File:** {uploaded_name}  \n**Size:** {uploaded_size_kb} KB")
+            st.markdown(f"**File:** {uploaded_name}  \n**Size:** {uploaded_size_kb} KB", unsafe_allow_html=True)
         except Exception:
             st.markdown("**File:** uploaded")
     else:
