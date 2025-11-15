@@ -236,7 +236,7 @@ st.markdown("""
     .card-title {
         font-size: 1.25rem;
         font-weight: 600;
-        text-align: centre;
+        text-align: center;
         color: #212121;
         margin: 0 0 1rem 0;
         display: flex;
