@@ -1580,7 +1580,13 @@ elif st.session_state.step == 3:
                     
                     # Schedule table
                     st.markdown(f"**Detailed Schedule - {line}**")
-                    
+
+                    def color_grade(val):
+                            if val in grade_color_map:
+                                color = grade_color_map[val]
+                                return f'background-color: {color}; color: white; font-weight: bold; text-align: center;'
+                            return ''
+
                     schedule_data = []
                     current_grade = None
                     start_day = None
@@ -1617,11 +1623,13 @@ elif st.session_state.step == 3:
                             "Days": duration
                         })
                 
-                    if schedule_data:
-                        schedule_df = pd.DataFrame(schedule_data)
-                        st.dataframe(schedule_df, use_container_width=True, hide_index=True)
-                    
-                    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+                    if not schedule_data:
+                        st.info(f"No production data available for {line}.")
+                        continue
+                
+                    schedule_df = pd.DataFrame(schedule_data)
+                    styled_df = schedule_df.style.applymap(color_grade, subset=['Grade'])
+                    st.dataframe(styled_df, use_container_width=True)
             
             # TAB 2: SUMMARY ANALYTICS
             with tab2:
