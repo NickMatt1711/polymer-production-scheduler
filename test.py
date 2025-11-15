@@ -575,17 +575,17 @@ st.markdown(f"""
 # STEP 1: UPLOAD DATA
 # ============================================================================
 if st.session_state.step == 1:
-    
-    uploaded_file = st.file_uploader(
-        "Choose Excel File",
-        type=["xlsx"],
-        help="Upload an Excel file with Plant, Inventory, and Demand sheets",
-        label_visibility="collapsed"
-    )
 
     col1, col2 = st.columns([11, 1])
 
     with col1:
+        uploaded_file = st.file_uploader(
+            "Choose Excel File",
+            type=["xlsx"],
+            help="Upload an Excel file with Plant, Inventory, and Demand sheets",
+            label_visibility="collapsed"
+        )
+    
         if uploaded_file is not None:
             st.session_state.uploaded_file = uploaded_file
             st.success("✅ File uploaded successfully!")
