@@ -576,14 +576,14 @@ st.markdown(f"""
 # ============================================================================
 if st.session_state.step == 1:
 
-    col1, col2 = st.columns([11, 1])
+    col1, col2 = st.columns([7, 1])
 
     with col1:
         uploaded_file = st.file_uploader(
             "Choose Excel File",
             type=["xlsx"],
-            help="Upload an Excel file with Plant, Inventory, and Demand sheets",
-            label_visibility="collapsed"
+            label="Upload an Excel file with Plant, Inventory, and Demand sheets",
+            label_visibility="visibile"
         )
     
         if uploaded_file is not None:
