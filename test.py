@@ -284,22 +284,6 @@ st.markdown("""
     .stButton > button:active {
         transform: translateY(0);
     }
-
-    /* Download Button - Material Design */
-    [data-testid="stDownloadButton"] {
-        background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-        border: 2px dashed #667eea;
-        border-radius: 16px;
-        padding: 1rem 1rem;
-        text-align: center;
-        transition: all 0.3s ease;
-    }
-    
-    [data-testid="stDownloadButton"]:hover {
-        border-color: #764ba2;
-        background: linear-gradient(135deg, #f0f4ff 0%, #e3e9f7 100%);
-        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.15);
-    }
     
     /* File uploader - Material Design */
     [data-testid="stFileUploader"] {
@@ -611,6 +595,17 @@ if st.session_state.step == 1:
 
     with col2:
         sample_workbook = get_sample_workbook()
+        
+        st.markdown("""
+            <style>
+                /* Target the download button container */
+                .stDownloadButton > button {
+                    width: calc(100% + 1rem) !important;
+                    margin-left: -0.5rem !important;
+                    margin-right: -0.5rem !important;
+                }
+            </style>
+            """, unsafe_allow_html=True)
         
         st.download_button(
             label="📥 Download Excel Template",
