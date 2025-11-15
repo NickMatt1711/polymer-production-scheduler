@@ -223,6 +223,7 @@ st.markdown("""
     .material-card {
         background: #F6ECFF;
         border-radius: 16px;
+        margin-bottom: 1.5rem;
         padding: 2rem;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -241,7 +242,6 @@ st.markdown("""
         margin: 0 0 1rem 0;
         display: flex;
         align-items: center;
-        gap: 0.5rem;
     }
     
     .card-subtitle {
