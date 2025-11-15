@@ -224,7 +224,6 @@ st.markdown("""
         background: #F6ECFF;
         border-radius: 16px;
         padding: 2rem;
-        margin-bottom: 1.5rem;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         border: 1px solid rgba(0, 0, 0, 0.06);
