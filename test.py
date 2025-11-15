@@ -1274,8 +1274,8 @@ else:
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #9CA3AF; font-size: 0.875rem;'>Production Scheduler • Built with Streamlit</div>",
-    unsafe_allow_html=True
-) stockout_penalty * deficit
+    unsafe_allow_html=True) 
+stockout_penalty * deficit
             
             # Minimum closing inventory
             for grade in grades:
