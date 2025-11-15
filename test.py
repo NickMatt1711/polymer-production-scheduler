@@ -126,6 +126,7 @@ st.markdown("""
     
     .app-bar h1 {
         margin: 0;
+        align-items: center;
         font-size: 2rem;
         font-weight: 600;
         letter-spacing: -0.5px;
@@ -509,7 +510,7 @@ st.markdown("""
     }
     
     .styled-list li {
-        padding: 0.5rem 0 0.5rem 2rem;
+        padding: 0.5rem 0 0.5rem 1rem;
         position: relative;
     }
     
