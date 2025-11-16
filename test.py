@@ -11,7 +11,6 @@ import traceback
 
 # ============================================================================
 # PART 1: OPTIMIZATION ENGINE CLASS
-# (Refactored logic from test(1).py)
 # ============================================================================
 
 class PolymerProductionModel:
@@ -135,7 +134,6 @@ class PolymerProductionModel:
         
         # (Transition rules processing is omitted as it requires re-reading the Excel file)
         # (In a real app, you'd pass the excel_file bytes to the class)
-        # For this demo, we assume no transition rules
         self.transition_rules = {}
 
     def _build_model(self):
@@ -500,7 +498,7 @@ def process_shutdown_dates(plant_df, dates):
                 end_date = pd.to_datetime(shutdown_end).date()
                 
                 if start_date > end_date:
-                    st.warning(f"⚠️ Shutdown start date after end date for {plant}. Ignoring shutdown.")
+                    # Don't show UI warning here, let the model just ignore it
                     shutdown_periods[plant] = []
                     continue
                 
@@ -508,12 +506,12 @@ def process_shutdown_dates(plant_df, dates):
                 
                 if shutdown_days:
                     shutdown_periods[plant] = shutdown_days
-                    st.info(f"🔧 Shutdown scheduled for {plant}: {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({len(shutdown_days)} days)")
+                    # st.info(f"🔧 Shutdown scheduled for {plant}: {start_date.strftime('%d-%b-%y')} to {end_date.strftime('%d-%b-%y')} ({len(shutdown_days)} days)")
                 else:
                     shutdown_periods[plant] = []
                     
             except Exception as e:
-                st.warning(f"⚠️ Invalid shutdown dates for {plant}: {e}")
+                # st.warning(f"⚠️ Invalid shutdown dates for {plant}: {e}")
                 shutdown_periods[plant] = []
         else:
             shutdown_periods[plant] = []
@@ -522,7 +520,6 @@ def process_shutdown_dates(plant_df, dates):
 
 # ============================================================================
 # PART 2: STREAMLIT UI
-# (This remains largely the same, but now calls the class)
 # ============================================================================
 
 # --- Page Config & Session State ---
@@ -545,7 +542,7 @@ if 'optimization_params' not in st.session_state:
         'transition_penalty': 100,
     }
 
-# --- CSS (Unchanged) ---
+# --- CSS (Minimal) ---
 st.markdown("""
 <style>
     [data-testid="stSidebar"] { display: none; }
@@ -614,7 +611,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# STEP 1: UPLOAD DATA (Unchanged)
+# STEP 1: UPLOAD DATA
 # ============================================================================
 if st.session_state.step == 1:
     col1, col2 = st.columns([4, 1])
@@ -645,25 +642,38 @@ if st.session_state.step == 1:
     """, unsafe_allow_html=True)
 
 # ============================================================================
-# STEP 2: PREVIEW & CONFIGURE (Unchanged)
+# STEP 2: PREVIEW & CONFIGURE (Modified to cache data)
 # ============================================================================
 elif st.session_state.step == 2:
     try:
-        uploaded_file = st.session_state.uploaded_file
-        uploaded_file.seek(0)
-        excel_file = io.BytesIO(uploaded_file.read())
+        # Check if dataframes are already in session state
+        if 'plant_df' not in st.session_state:
+            if st.session_state.uploaded_file is None:
+                st.warning("No file uploaded. Please go back to Step 1.")
+                st.stop()
+                
+            uploaded_file = st.session_state.uploaded_file
+            uploaded_file.seek(0)
+            excel_file = io.BytesIO(uploaded_file.read())
+            
+            # Read and store in session state
+            st.session_state['plant_df'] = pd.read_excel(excel_file, sheet_name='Plant')
+            excel_file.seek(0)
+            st.session_state['inventory_df'] = pd.read_excel(excel_file, sheet_name='Inventory')
+            excel_file.seek(0)
+            st.session_state['demand_df'] = pd.read_excel(excel_file, sheet_name='Demand')
+        
+        # Read from cache
+        plant_df = st.session_state['plant_df']
+        inventory_df = st.session_state['inventory_df']
+        demand_df = st.session_state['demand_df']
         
         tab1, tab2, tab3 = st.tabs(["🏭 Plant Data", "📦 Inventory Data", "📊 Demand Data"])
         with tab1:
-            plant_df = pd.read_excel(excel_file, sheet_name='Plant')
             st.dataframe(plant_df, use_container_width=True, height=300)
         with tab2:
-            excel_file.seek(0)
-            inventory_df = pd.read_excel(excel_file, sheet_name='Inventory')
             st.dataframe(inventory_df, use_container_width=True, height=300)
         with tab3:
-            excel_file.seek(0)
-            demand_df = pd.read_excel(excel_file, sheet_name='Demand')
             st.dataframe(demand_df, use_container_width=True, height=300)
         
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
@@ -682,6 +692,10 @@ elif st.session_state.step == 2:
         col1, _, col3 = st.columns([1, 2, 1])
         with col1:
             if st.button("← Back to Upload", use_container_width=True):
+                # Clear cache when going back to upload
+                for key in ['plant_df', 'inventory_df', 'demand_df', 'uploaded_file']:
+                    if key in st.session_state:
+                        del st.session_state[key]
                 st.session_state.step = 1
                 st.rerun()
         with col3:
@@ -691,10 +705,16 @@ elif st.session_state.step == 2:
         
     except Exception as e:
         st.error(f"❌ Error processing file: {str(e)}")
-        if st.button("← Back to Upload"): st.session_state.step = 1; st.rerun()
+        if st.button("← Back to Upload"): 
+            st.session_state.step = 1
+            # Clear cache on error
+            for key in ['plant_df', 'inventory_df', 'demand_df', 'uploaded_file']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
 
 # ============================================================================
-# STEP 3: OPTIMIZATION & RESULTS (Modified to use the class)
+# STEP 3: OPTIMIZATION & RESULTS (Modified to read from cache)
 # ============================================================================
 elif st.session_state.step == 3:
     st.markdown('<div class="material-card"><div class="card-title">⚡ Running Optimization</div></div>', unsafe_allow_html=True)
@@ -702,17 +722,21 @@ elif st.session_state.step == 3:
     status_text = st.empty()
     
     try:
-        # --- 1. Load Data ---
-        status_text.markdown('<div class="alert-box info">📊 Loading data...</div>', unsafe_allow_html=True)
-        uploaded_file = st.session_state.uploaded_file
-        uploaded_file.seek(0)
-        excel_file = io.BytesIO(uploaded_file.read())
+        # --- 1. Load Data FROM CACHE ---
+        status_text.markdown('<div class="alert-box info">📊 Loading data from cache...</div>', unsafe_allow_html=True)
         
-        plant_df = pd.read_excel(excel_file, sheet_name='Plant')
-        excel_file.seek(0)
-        inventory_df = pd.read_excel(excel_file, sheet_name='Inventory')
-        excel_file.seek(0)
-        demand_df = pd.read_excel(excel_file, sheet_name='Demand')
+        # Check if cache is valid
+        if 'plant_df' not in st.session_state:
+            st.error("Data cache is empty. Please return to Step 2.")
+            if st.button("← Go to Step 2"):
+                st.session_state.step = 2
+                st.rerun()
+            st.stop()
+
+        # Read directly from session state (FAST)
+        plant_df = st.session_state['plant_df']
+        inventory_df = st.session_state['inventory_df']
+        demand_df = st.session_state['demand_df']
         
         params = st.session_state.optimization_params
         progress_bar.progress(10)
@@ -794,7 +818,9 @@ elif st.session_state.step == 3:
                         line_prod = 0
                         for d in range(num_days):
                             if solution_data["solution_schedule"][line][solution_data["formatted_dates"][d]] == grade:
-                                line_prod += plant_df.loc[plant_df['Plant'] == line, 'Capacity per day'].values[0]
+                                # Get capacity for this line
+                                line_capacity = plant_df.loc[plant_df['Plant'] == line, 'Capacity per day'].values[0]
+                                line_prod += line_capacity
                         row[line] = line_prod
                         plant_totals[line] += line_prod
                     row['Total Produced'] = grade_totals[grade]
@@ -805,24 +831,113 @@ elif st.session_state.step == 3:
                 prod_data.append(totals_row)
                 st.dataframe(pd.DataFrame(prod_data), use_container_width=True, hide_index=True)
 
+            # ======================================================
+            # THIS IS THE CORRECTED TAB 3 BLOCK
+            # ======================================================
             with tab3:
+                # Get data from the solution
+                min_inventory = solution_data["min_inventory"]
+                max_inventory = solution_data["max_inventory"]
+                allowed_lines = solution_data["allowed_lines"]
+                last_actual_day_index = num_days - params['buffer_days'] - 1
+
                 for grade in sorted_grades:
+                    # Re-create the inventory dataframe from solution data
                     inv_data = solution_data["solution_inventory"][grade]
-                    inv_df = pd.DataFrame(list(inv_data.items()), columns=['Date', 'Inventory'])
-                    inv_df = inv_df[inv_df['Date'] != 'final']
-                    inv_df['Date'] = pd.to_datetime(inv_df['Date'], format='%d-%b-%y')
-                    inv_df = inv_df.sort_values(by='Date')
+                    inv_df = pd.DataFrame(list(inv_data.items()), columns=['Date_Str', 'Inventory'])
+                    inv_df = inv_df[inv_df['Date_Str'] != 'final']
+                    inv_df['Date'] = pd.to_datetime(inv_df['Date_Str'], format='%d-%b-%y')
+                    inv_df = inv_df.sort_values(by='Date').reset_index(drop=True)
+                    
+                    # Filter to the non-buffer period for annotations
+                    plot_df = inv_df.iloc[:last_actual_day_index + 1]
+
+                    if plot_df.empty:
+                        st.info(f"No inventory data to plot for {grade}.")
+                        continue
+
+                    # Calculate annotation points from the dataframe
+                    start_val = plot_df.iloc[0]['Inventory']
+                    start_x = plot_df.iloc[0]['Date']
+                    end_val = plot_df.iloc[-1]['Inventory']
+                    end_x = plot_df.iloc[-1]['Date']
+                    
+                    peak_idx = plot_df['Inventory'].idxmax()
+                    highest_val = plot_df.loc[peak_idx]['Inventory']
+                    highest_x = plot_df.loc[peak_idx]['Date']
+                    
+                    low_idx = plot_df['Inventory'].idxmin()
+                    lowest_val = plot_df.loc[low_idx]['Inventory']
+                    lowest_x = plot_df.loc[low_idx]['Date']
 
                     fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=inv_df['Date'], y=inv_df['Inventory'], mode="lines+markers", name=grade, line=dict(color=grade_color_map[grade], width=3)))
-                    
-                    if solution_data["min_inventory"][grade] > 0:
-                        fig.add_hline(y=solution_data["min_inventory"][grade], line=dict(color="#ef4444", width=2, dash="dash"), annotation_text=f"Min")
-                    if solution_data["max_inventory"][grade] < 1000000000:
-                        fig.add_hline(y=solution_data["max_inventory"][grade], line=dict(color="#10b981", width=2, dash="dash"), annotation_text=f"Max")
+                
+                    # Add the full line trace (including buffer days)
+                    fig.add_trace(go.Scatter(
+                        x=inv_df['Date'],
+                        y=inv_df['Inventory'],
+                        mode="lines+markers",
+                        name=grade,
+                        line=dict(color=grade_color_map[grade], width=3),
+                        marker=dict(size=6),
+                        hovertemplate="Date: %{x|%d-%b-%y}<br>Inventory: %{y:.0f} MT<extra></extra>"
+                    ))
+                
+                    # Add shutdown vrects
+                    for line in allowed_lines[grade]:
+                        if line in shutdown_periods and shutdown_periods[line]:
+                            start_shutdown = dates[shutdown_periods[line][0]]
+                            end_shutdown = dates[shutdown_periods[line][-1]] + timedelta(days=1)
+                            fig.add_vrect(x0=start_shutdown, x1=end_shutdown, fillcolor="red", opacity=0.1, layer="below", line_width=0, annotation_text=f"Shutdown: {line}")
 
-                    fig.update_layout(title=f"Inventory Level - {grade}", xaxis_title="Date", yaxis_title="Inventory (MT)", plot_bgcolor="white", height=420, showlegend=False)
+                    # Add Min/Max hlines
+                    if min_inventory[grade] > 0:
+                        fig.add_hline(y=min_inventory[grade], line=dict(color="#ef4444", width=2, dash="dash"), annotation_text=f"Min: {min_inventory[grade]:,.0f}")
+                    if max_inventory[grade] < 1000000000:
+                        fig.add_hline(y=max_inventory[grade], line=dict(color="#10b981", width=2, dash="dash"), annotation_text=f"Max: {max_inventory[grade]:,.0f}")
+                
+                    # Add key point annotations
+                    annotations = [
+                        dict(x=start_x, y=start_val, text=f"Start: {start_val:.0f}", ax=-40, ay=30),
+                        dict(x=end_x, y=end_val, text=f"End: {end_val:.0f}", ax=40, ay=30),
+                        dict(x=highest_x, y=highest_val, text=f"Peak: {highest_val:.0f}", ax=0, ay=-40, font=dict(color="#10b981")),
+                        dict(x=lowest_x, y=lowest_val, text=f"Low: {lowest_val:.0f}", ax=0, ay=40, font=dict(color="#ef4444"))
+                    ]
+                
+                    # Restored layout with gridlines
+                    fig.update_layout(
+                        title=f"Inventory Level - {grade}",
+                        xaxis=dict(
+                            title="Date",
+                            showgrid=True,
+                            gridcolor="#e0e0e0",
+                            tickformat="%d-%b"
+                        ),
+                        yaxis=dict(
+                            title="Inventory Volume (MT)",
+                            showgrid=True,
+                            gridcolor="#e0e0e0"
+                        ),
+                        plot_bgcolor="white",
+                        paper_bgcolor="white",
+                        margin=dict(l=60, r=80, t=80, b=60),
+                        height=420,
+                        showlegend=False
+                    )
+                    
+                    # Add annotations with styling
+                    for ann in annotations:
+                        fig.add_annotation(
+                            x=ann['x'], y=ann['y'], text=ann['text'],
+                            showarrow=True, arrowhead=2, ax=ann['ax'], ay=ann['ay'],
+                            font=ann.get('font', dict(color="#212121", size=11)),
+                            bgcolor="white", bordercolor="#bdbdbd", borderwidth=1, borderpad=4, opacity=0.9
+                        )
+                
                     st.plotly_chart(fig, use_container_width=True)
+            # ======================================================
+            # END OF CORRECTED TAB 3 BLOCK
+            # ======================================================
 
         else:
             # No solution found
@@ -840,18 +955,27 @@ elif st.session_state.step == 3:
         col1, col2, _ = st.columns([1, 1, 2])
         with col1:
             if st.button("🔄 New Optimization", use_container_width=True):
-                st.session_state.step = 1; st.session_state.uploaded_file = None; st.rerun()
+                for key in ['plant_df', 'inventory_df', 'demand_df', 'uploaded_file']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.session_state.step = 1
+                st.rerun()
         with col2:
             if st.button("🔧 Adjust Parameters", use_container_width=True):
-                st.session_state.step = 2; st.rerun()
+                st.session_state.step = 2
+                st.rerun()
 
     except Exception as e:
         st.markdown(f'<div class="alert-box warning"><strong>❌ Error During Optimization</strong><br>{str(e)}</div>', unsafe_allow_html=True)
         with st.expander("View Technical Details"):
             st.code(traceback.format_exc())
         if st.button("← Return to Start"):
-            st.session_state.step = 1; st.session_state.uploaded_file = None; st.rerun()
+            for key in ['plant_df', 'inventory_df', 'demand_df', 'uploaded_file']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state.step = 1
+            st.rerun()
 
 # --- Footer ---
 st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-st.markdown("<div style='text-align: center; color: #9e9e9e; font-size: 0.875rem;'>Polymer Production Scheduler • Refactored Architecture v4.0</div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center; color: #9e9e9e; font-size: 0.875rem;'>Polymer Production Scheduler • Refactored Architecture v4.1</div>", unsafe_allow_html=True)
