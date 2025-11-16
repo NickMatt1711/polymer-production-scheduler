@@ -582,7 +582,7 @@ elif st.session_state.step == 2:
         excel_file = io.BytesIO(uploaded_file.read())
         
         # Data preview in tabs
-        tab1, tab2, tab3 = st.tabs(["🏭 Plant Data", "📦 Inventory Data", "📊 Demand Data"])
+        tab1, tab2, tab3, tab4 = st.tabs(["🏭 Plant Data", "📦 Inventory Data", "📊 Demand Data", "🔄 Transition Matrices"])
         
         with tab1:
             try:
@@ -650,6 +650,55 @@ elif st.session_state.step == 2:
                 st.error(f"❌ Error reading Demand sheet: {e}")
                 st.stop()
         
+        with tab4:
+            try:
+                excel_file.seek(0)
+                plant_df_temp = pd.read_excel(excel_file, sheet_name='Plant')
+                
+                transition_found = False
+                for i in range(len(plant_df_temp)):
+                    plant_name = plant_df_temp['Plant'].iloc[i]
+                    
+                    possible_sheet_names = [
+                        f'Transition_{plant_name}',
+                        f'Transition_{plant_name.replace(" ", "_")}',
+                        f'Transition{plant_name.replace(" ", "")}',
+                    ]
+                    
+                    transition_df_found = None
+                    sheet_name_found = None
+                    for sheet_name in possible_sheet_names:
+                        try:
+                            excel_file.seek(0)
+                            transition_df_found = pd.read_excel(excel_file, sheet_name=sheet_name, index_col=0)
+                            sheet_name_found = sheet_name
+                            break
+                        except:
+                            continue
+                    
+                    if transition_df_found is not None:
+                        st.markdown(f"#### 🏭 {plant_name} - Transition Matrix")
+                        
+                        # Style the transition matrix
+                        def highlight_no(val):
+                            if str(val).lower() == 'no':
+                                return 'background-color: #ffebee; color: #c62828; font-weight: bold; text-align: center;'
+                            elif str(val).lower() == 'yes':
+                                return 'background-color: #e8f5e9; color: #2e7d32; font-weight: bold; text-align: center;'
+                            return 'text-align: center;'
+                        
+                        styled_transition = transition_df_found.style.applymap(highlight_no)
+                        st.dataframe(styled_transition, use_container_width=True)
+                        st.markdown(f'<span class="chip success">✓ Loaded from sheet: {sheet_name_found}</span>', unsafe_allow_html=True)
+                        transition_found = True
+                
+                if not transition_found:
+                    st.info("ℹ️ No transition matrices found. All grade transitions will be allowed.")
+                
+            except Exception as e:
+                st.warning(f"Could not load transition matrices: {e}")
+                st.info("ℹ️ All grade transitions will be allowed.")
+        
         st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
         
         # Configuration section
@@ -703,18 +752,18 @@ elif st.session_state.step == 2:
         col1, col2, col3 = st.columns([1, 2, 1])
         
         with col1:
-            if st.button("← Back to Upload", use_container_width=True):
+            if st.button("← Back to Upload", use_container_width=True, key="back_step2"):
                 st.session_state.step = 1
                 st.rerun()
         
         with col2:
-            if st.button("🚀 Run Optimization", type="primary", use_container_width=True):
+            if st.button("🚀 Run Optimization", type="primary", use_container_width=True, key="run_opt"):
                 st.session_state.step = 3
                 st.rerun()
         
     except Exception as e:
         st.error(f"❌ Error processing file: {str(e)}")
-        if st.button("← Back to Upload"):
+        if st.button("← Back to Upload", key="error_back"):
             st.session_state.step = 1
             st.rerun()
 
@@ -1126,42 +1175,31 @@ elif st.session_state.step == 3:
                 objective_terms.append(CRITICAL_PENALTY * closing_deficit * 3)
         
         # TIER 4: OPERATIONAL - Transitions (Operations Cost)
-        # IMPROVEMENT 2: Simplified transition tracking (single variable per line-day)
-        transition_vars = []
-        
+        # Use original simpler approach - faster and works well
         for line in lines:
             for d in range(num_days - 1):
-                any_transition = model.NewBoolVar(f'transition_{line}_{d}')
-                
-                # Check if same grade continues
-                continuity_indicators = []
-                for grade in grades:
-                    same_grade = model.NewBoolVar(f'same_{grade}_{line}_{d}')
-                    # same_grade = 1 if both days produce this grade
-                    model.AddBoolAnd([is_producing[(grade, line, d)], 
-                                     is_producing[(grade, line, d + 1)]]).OnlyEnforceIf(same_grade)
-                    model.AddBoolOr([is_producing[(grade, line, d)].Not(), 
-                                    is_producing[(grade, line, d + 1)].Not()]).OnlyEnforceIf(same_grade.Not())
-                    continuity_indicators.append(same_grade)
-                
-                # any_transition = 1 if NO grade continues (i.e., all continuity_indicators are 0)
-                # This means: at least one day produces something AND grade changed
-                has_continuity = model.NewBoolVar(f'has_continuity_{line}_{d}')
-                model.AddMaxEquality(has_continuity, continuity_indicators)
-                
-                # Transition only if production happens on both days AND no continuity
-                prod_day_d = model.NewBoolVar(f'prod_{line}_{d}')
-                prod_day_d_plus_1 = model.NewBoolVar(f'prod_{line}_{d+1}')
-                
-                model.AddMaxEquality(prod_day_d, [is_producing[(grade, line, d)] for grade in grades])
-                model.AddMaxEquality(prod_day_d_plus_1, [is_producing[(grade, line, d + 1)] for grade in grades])
-                
-                # Transition = production on both days AND no continuity
-                model.AddBoolAnd([prod_day_d, prod_day_d_plus_1, has_continuity.Not()]).OnlyEnforceIf(any_transition)
-                model.AddBoolOr([prod_day_d.Not(), prod_day_d_plus_1.Not(), has_continuity]).OnlyEnforceIf(any_transition.Not())
-                
-                transition_vars.append(any_transition)
-                objective_terms.append(transition_penalty * any_transition)
+                for grade1 in grades:
+                    if line not in allowed_lines[grade1]:
+                        continue
+                    for grade2 in grades:
+                        if line not in allowed_lines[grade2] or grade1 == grade2:
+                            continue
+                        
+                        # Skip if transition not allowed by matrix
+                        if transition_rules.get(line) and grade1 in transition_rules[line]:
+                            if grade2 not in transition_rules[line][grade1]:
+                                continue
+                        
+                        # Create transition variable
+                        trans_var = model.NewBoolVar(f'trans_{line}_{d}_{grade1}_to_{grade2}')
+                        
+                        # trans_var = 1 iff grade1 on day d AND grade2 on day d+1
+                        model.AddBoolAnd([is_producing[(grade1, line, d)], 
+                                         is_producing[(grade2, line, d + 1)]]).OnlyEnforceIf(trans_var)
+                        model.Add(trans_var == 0).OnlyEnforceIf(is_producing[(grade1, line, d)].Not())
+                        model.Add(trans_var == 0).OnlyEnforceIf(is_producing[(grade2, line, d + 1)].Not())
+                        
+                        objective_terms.append(transition_penalty * trans_var)
         
         # TIER 5: EFFICIENCY - Inventory holding costs (optional, low weight)
         HOLDING_COST = 1
@@ -1175,7 +1213,7 @@ elif st.session_state.step == 3:
         status_text.markdown('<div class="alert-box info">⚡ Solving optimization problem...</div>', unsafe_allow_html=True)
         
         # ====================================================================
-        # SOLVER CONFIGURATION - OPTIMIZED PARAMETERS
+        # SOLVER CONFIGURATION - BALANCED FOR SPEED AND QUALITY
         # ====================================================================
         
         solver = cp_model.CpSolver()
@@ -1185,12 +1223,9 @@ elif st.session_state.step == 3:
         solver.parameters.num_search_workers = 8
         solver.parameters.random_seed = 42
         
-        # Advanced parameters for scheduling problems
-        solver.parameters.linearization_level = 2
-        solver.parameters.cp_model_probing_level = 2
-        solver.parameters.symmetry_level = 4
-        solver.parameters.optimize_with_core = True
-        solver.parameters.search_branching = cp_model.PORTFOLIO_SEARCH
+        # Optimized for scheduling problems - balanced approach
+        solver.parameters.linearization_level = 1  # Keep at 1 for speed
+        solver.parameters.cp_model_probing_level = 0  # Reduce for speed
         solver.parameters.log_search_progress = True
         
         # IMPROVEMENT 3: Minimal solution callback
@@ -1700,13 +1735,13 @@ elif st.session_state.step == 3:
             col1, col2, col3 = st.columns([1, 2, 1])
             
             with col1:
-                if st.button("🔄 New Optimization", use_container_width=True):
+                if st.button("🔄 New Optimization", use_container_width=True, key="new_opt"):
                     st.session_state.step = 1
                     st.session_state.uploaded_file = None
                     st.rerun()
             
             with col2:
-                if st.button("🔧 Adjust Parameters", use_container_width=True):
+                if st.button("🔧 Adjust Parameters", use_container_width=True, key="adjust_params"):
                     st.session_state.step = 2
                     st.rerun()
 
