@@ -1133,17 +1133,32 @@ elif st.session_state.step == 3:
             for d in range(num_days - 1):
                 any_transition = model.NewBoolVar(f'transition_{line}_{d}')
                 
-                # Transition occurs if no grade continues
-                same_grade_indicators = []
+                # Check if same grade continues
+                continuity_indicators = []
                 for grade in grades:
                     same_grade = model.NewBoolVar(f'same_{grade}_{line}_{d}')
+                    # same_grade = 1 if both days produce this grade
                     model.AddBoolAnd([is_producing[(grade, line, d)], 
                                      is_producing[(grade, line, d + 1)]]).OnlyEnforceIf(same_grade)
-                    same_grade_indicators.append(same_grade)
+                    model.AddBoolOr([is_producing[(grade, line, d)].Not(), 
+                                    is_producing[(grade, line, d + 1)].Not()]).OnlyEnforceIf(same_grade.Not())
+                    continuity_indicators.append(same_grade)
                 
-                # Transition = NOT(any same grade) = 1 - sum(same_grade)
-                model.Add(any_transition <= 1 - sum(same_grade_indicators))
-                model.AddMaxEquality(any_transition, [0] + same_grade_indicators).OnlyEnforceIf(any_transition.Not())
+                # any_transition = 1 if NO grade continues (i.e., all continuity_indicators are 0)
+                # This means: at least one day produces something AND grade changed
+                has_continuity = model.NewBoolVar(f'has_continuity_{line}_{d}')
+                model.AddMaxEquality(has_continuity, continuity_indicators)
+                
+                # Transition only if production happens on both days AND no continuity
+                prod_day_d = model.NewBoolVar(f'prod_{line}_{d}')
+                prod_day_d_plus_1 = model.NewBoolVar(f'prod_{line}_{d+1}')
+                
+                model.AddMaxEquality(prod_day_d, [is_producing[(grade, line, d)] for grade in grades])
+                model.AddMaxEquality(prod_day_d_plus_1, [is_producing[(grade, line, d + 1)] for grade in grades])
+                
+                # Transition = production on both days AND no continuity
+                model.AddBoolAnd([prod_day_d, prod_day_d_plus_1, has_continuity.Not()]).OnlyEnforceIf(any_transition)
+                model.AddBoolOr([prod_day_d.Not(), prod_day_d_plus_1.Not(), has_continuity]).OnlyEnforceIf(any_transition.Not())
                 
                 transition_vars.append(any_transition)
                 objective_terms.append(transition_penalty * any_transition)
